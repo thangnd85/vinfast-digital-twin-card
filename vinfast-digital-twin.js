@@ -181,6 +181,9 @@ class VinFastDigitalTwin extends HTMLElement {
               <div class="vf-tire vf-tire-fr" id="tire-fr"><ha-icon icon="mdi:tire"></ha-icon><br><span></span> bar</div>
               <div class="vf-tire vf-tire-rl" id="tire-rl"><ha-icon icon="mdi:tire"></ha-icon><br><span></span> bar</div>
               <div class="vf-tire vf-tire-rr" id="tire-rr"><ha-icon icon="mdi:tire"></ha-icon><br><span></span> bar</div>
+              
+              <div class="vf-doors-status" id="vf-doors-container">
+                </div>
             </div>
 
             <div class="vf-stats-grid">
@@ -204,6 +207,10 @@ class VinFastDigitalTwin extends HTMLElement {
                 <ha-icon icon="mdi:map-marker-path" style="color: #8b5cf6;"></ha-icon>
                 <div class="stat-info"><span class="stat-label">Trip hiện tại</span><br><span class="stat-val" id="vf-stat-trip">--</span></div>
               </div>
+              <div class="stat-box">
+                <ha-icon icon="mdi:lightning-bolt" style="color: #eab308;"></ha-icon>
+                <div class="stat-info"><span class="stat-label">Điện năng Trip</span><br><span class="stat-val" id="vf-stat-energy">--</span></div>
+              </div>
             </div>
 
             <div class="vf-controls-area">
@@ -219,7 +226,6 @@ class VinFastDigitalTwin extends HTMLElement {
             </div>
 
             <div class="vf-map-container" style="position:relative; border-radius:16px; overflow:hidden; margin-top:20px; border:1px solid #e5e7eb;">
-              
               <div style="position:absolute; top:12px; left:12px; z-index:400; width: 70%; max-width: 300px;">
                   <select id="trip-selector" style="width: 100%; background:rgba(255,255,255,0.95); backdrop-filter:blur(4px); border:2px solid #2563eb; border-radius:8px; padding:8px 10px; font-size:12px; font-weight:600; color:#1e3a8a; box-shadow:0 4px 10px rgba(0,0,0,0.2); outline:none; cursor:pointer;">
                     <option value="current">Đang tải lịch sử...</option>
@@ -261,15 +267,23 @@ class VinFastDigitalTwin extends HTMLElement {
         .vf-odo-label { font-size: 10px; font-weight: 800; color: #2563eb; letter-spacing: 1px; }
         .vf-odo-value { font-size: 24px; font-weight: 800; font-family: monospace; color: var(--primary-text-color); }
         
-        .vf-car-stage { position: relative; width: 100%; height: 220px; display: flex; justify-content: center; align-items: center; margin-bottom: 20px; }
+        .vf-car-stage { position: relative; width: 100%; height: 220px; display: flex; justify-content: center; align-items: center; margin-bottom: 25px; padding-bottom: 10px;}
         .vf-car-stage img { max-width: 90%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 20px 20px rgba(0,0,0,0.2)); z-index: 1; }
         .vf-status-badge { position: absolute; top: -10px; right: 0; background: #2563eb; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; z-index: 5;}
         .vf-tire { position: absolute; background: rgba(255,255,255,0.85); backdrop-filter: blur(8px); padding: 4px 8px; border-radius: 12px; border: 1px solid #e5e7eb; font-size: 11px; font-weight: 700; color: #374151; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); z-index: 5; }
         .vf-tire ha-icon { --mdc-icon-size: 14px; color: #6b7280; }
-        .vf-tire-fl { bottom: 5%; left: 0; } .vf-tire-fr { top: 15%; left: 0; } .vf-tire-rl { bottom: 5%; right: 0; } .vf-tire-rr { top: 15%; right: 0; }
+        .vf-tire-fl { bottom: 10%; left: 0; } .vf-tire-fr { top: 15%; left: 0; } .vf-tire-rl { bottom: 10%; right: 0; } .vf-tire-rr { top: 15%; right: 0; }
         
-        /* CSS MỚI CHO BẢNG ĐỒNG HỒ STATS */
-        .vf-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        /* CỤM CỬA VÀ CỐP */
+        .vf-doors-status { position: absolute; bottom: -15px; display: flex; gap: 8px; justify-content: center; width: 100%; z-index: 10; flex-wrap: wrap;}
+        .door-badge { display: flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: bold; background: rgba(255,255,255,0.95); border: 1px solid #e5e7eb; box-shadow: 0 2px 6px rgba(0,0,0,0.1); color: #374151; transition: all 0.3s;}
+        .door-badge.open { background: #fee2e2; border-color: #ef4444; color: #b91c1c; animation: pulseRed 1.5s infinite; }
+        .door-badge ha-icon { --mdc-icon-size: 14px; }
+        @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+
+        /* LƯỚI THẺ THÔNG TIN 3 CỘT x 2 HÀNG */
+        .vf-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+        @media (max-width: 450px) { .vf-stats-grid { grid-template-columns: repeat(2, 1fr); } }
         .stat-box { display: flex; align-items: center; gap: 8px; background: rgba(243, 244, 246, 0.6); padding: 10px; border-radius: 12px; border: 1px solid rgba(229, 231, 235, 0.8); transition: transform 0.2s; }
         .stat-box:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         .stat-box ha-icon { --mdc-icon-size: 24px; }
@@ -451,13 +465,13 @@ class VinFastDigitalTwin extends HTMLElement {
     const gear = getValidState(`sensor.${p}_vi_tri_can_so`) || 'P';
     const speed = getValidState(`sensor.${p}_toc_do_hien_tai`) || '0';
     
-    // TẢI CÁC THÔNG SỐ ĐỂ HIỂN THỊ VÀO BẢNG STATS MỚI
+    // TẢI CÁC THÔNG SỐ VÀO 6 THẺ
     const batt = getValidState(`sensor.${p}_phan_tram_pin`);
-    // Thử lấy Quãng đường dự kiến (App mới), nếu ko có thì lấy Thực tế đầy 100% pin
     const range = getValidState(`sensor.${p}_quang_duong_du_kien`) || getValidState(`sensor.${p}_quang_duong_thuc_te_day_100_pin`);
     const eff = getValidState(`sensor.${p}_hieu_suat_tieu_thu_trung_binh_xe`);
     const ideal = getValidState(`sensor.${p}_dai_toc_do_toi_uu_nhat`);
     const trip = getValidState(`sensor.${p}_quang_duong_chuyen_di_trip`);
+    const tripEnergy = getValidState(`sensor.${p}_dien_nang_tieu_thu_trip`);
 
     const odoRaw = getValidState(`sensor.${p}_tong_odo`);
     let odoClean = '--';
@@ -467,12 +481,13 @@ class VinFastDigitalTwin extends HTMLElement {
     this.querySelector('#vf-status-badge').innerText = status;
     this.querySelector('#vf-odo-int').innerText = odoClean;
     
-    // ĐỔ DỮ LIỆU VÀO BẢNG STATS
+    // ĐỔ DỮ LIỆU VÀO 6 THẺ
     this.querySelector('#vf-stat-batt').innerText = batt ? batt + ' %' : '--';
     this.querySelector('#vf-stat-range').innerText = range ? range + ' km' : '--';
     this.querySelector('#vf-stat-eff').innerText = eff ? eff + ' kWh/100km' : '--';
     this.querySelector('#vf-stat-ideal').innerText = ideal ? ideal : '--';
     this.querySelector('#vf-stat-trip').innerText = trip ? trip + ' km' : '--';
+    this.querySelector('#vf-stat-energy').innerText = tripEnergy ? tripEnergy + ' kWh' : '--';
 
     let rawImage = getValidState(`sensor.${p}_hinh_anh_xe_url`);
     if (!rawImage || rawImage.includes('unknown') || rawImage.trim() === '') {
@@ -483,13 +498,37 @@ class VinFastDigitalTwin extends HTMLElement {
 
     const updateTire = (id, val) => {
       const el = this.querySelector(id);
-      if (val !== null) { el.style.display = 'block'; el.querySelector('span').innerText = val; } 
+      if (val !== null && val !== 'unknown') { el.style.display = 'block'; el.querySelector('span').innerText = val; } 
       else { el.style.display = 'none'; }
     };
     updateTire('#tire-fl', getValidState(`sensor.${p}_ap_suat_lop_truoc_trai`)); 
     updateTire('#tire-fr', getValidState(`sensor.${p}_ap_suat_lop_truoc_phai`)); 
     updateTire('#tire-rl', getValidState(`sensor.${p}_ap_suat_lop_sau_trai`)); 
     updateTire('#tire-rr', getValidState(`sensor.${p}_ap_suat_lop_sau_phai`));
+
+    // =========================================
+    // XỬ LÝ CỤM CẢNH BÁO CỬA VÀ CỐP THÔNG MINH
+    // =========================================
+    const getDoorStatus = (slug) => getValidState(`sensor.${p}_${slug}`) === 'Mở';
+    const doorsConfig = [
+        { name: 'Cửa lái', open: getDoorStatus('cua_truoc_trai'), icon: 'mdi:car-door' },
+        { name: 'Cửa phụ', open: getDoorStatus('cua_truoc_phai'), icon: 'mdi:car-door' },
+        { name: 'Cửa sau T', open: getDoorStatus('cua_sau_trai'), icon: 'mdi:car-door' },
+        { name: 'Cửa sau P', open: getDoorStatus('cua_sau_phai'), icon: 'mdi:car-door' },
+        { name: 'Cốp sau', open: getDoorStatus('cop_sau'), icon: 'mdi:car-back' },
+        { name: 'Capo', open: getDoorStatus('nap_capo'), icon: 'mdi:car' }
+    ];
+
+    const openDoors = doorsConfig.filter(d => d.open);
+    const doorsEl = this.querySelector('#vf-doors-container');
+
+    if (openDoors.length === 0) {
+        // Chỉ hiện màu xanh tinh tế nhẹ nhàng khi tất cả đóng kín
+        doorsEl.innerHTML = `<div class="door-badge" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3); background: rgba(255,255,255,0.7);"><ha-icon icon="mdi:shield-check-outline"></ha-icon> Đóng kín</div>`;
+    } else {
+        // Hiện màu đỏ nổi bật và nhấp nháy cho những cửa nào ĐANG MỞ
+        doorsEl.innerHTML = openDoors.map(d => `<div class="door-badge open"><ha-icon icon="${d.icon}"></ha-icon> ${d.name}</div>`).join('');
+    }
 
     ['P','R','N','D'].forEach(g => {
       const el = this.querySelector(`#gear-${g}`);
