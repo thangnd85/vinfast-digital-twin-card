@@ -130,7 +130,7 @@ class VinFastDigitalTwin extends HTMLElement {
     if (!mapEl || typeof L === 'undefined') return;
     this._map = L.map(mapEl, { zoomControl: false, dragging: true, scrollWheelZoom: true, attributionControl: false }).setView([21.0285, 105.8542], 15);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(this._map);
-    this._marker = L.marker([21.0285, 105.8542], {icon: this.getCarIcon(0, null)}).addTo(this._map);
+    this._marker = L.marker([21.0285, 105.8542], {icon: this.getCarIcon(0, null), opacity: 0}).addTo(this._map);
     this._polyline = L.polyline([], {color: '#2563eb', weight: 4, opacity: 0.8}).addTo(this._map);
     this._stationLayer = L.layerGroup().addTo(this._map);
 
@@ -140,20 +140,16 @@ class VinFastDigitalTwin extends HTMLElement {
     observer.observe(mapEl);
   }
 
-  // HÀM TÍNH TOÁN THỜI GIAN TRÔI QUA (TIME AGO)
   getTimeSince(dateString) {
       if (!dateString) return "";
       const date = new Date(dateString);
       const seconds = Math.floor((new Date() - date) / 1000);
       
       if (seconds < 60) return "vừa xong";
-      
       const minutes = Math.floor(seconds / 60);
       if (minutes < 60) return `${minutes} phút trước`;
-      
       const hours = Math.floor(minutes / 60);
       if (hours < 24) return `${hours} giờ trước`;
-      
       const days = Math.floor(hours / 24);
       return `${days} ngày trước`;
   }
@@ -210,6 +206,20 @@ class VinFastDigitalTwin extends HTMLElement {
             </div>
 
             <div class="vf-doors-status" id="vf-doors-container"></div>
+
+            <div class="vf-charging-banner" id="vf-charging-banner" style="display: none;">
+                <div class="charging-info">
+                    <div class="charging-title">
+                        <ha-icon icon="mdi:ev-plug-type2" style="color: white;"></ha-icon>
+                        <span id="vf-charge-status-text">Hệ thống đang sạc</span>
+                    </div>
+                    <div class="charging-details">Giới hạn sạc: <span id="vf-charge-limit" style="font-weight:bold;">--%</span></div>
+                </div>
+                <div class="charging-time-box">
+                    <span id="vf-charge-time" class="charging-time">--</span>
+                    <span style="font-size: 11px; opacity: 0.8;">còn lại</span>
+                </div>
+            </div>
 
             <div class="vf-remote-bar" id="vf-remote-controls" style="display: none;">
                 <div class="remote-btn" id="btn-rc-lock" title="Khóa cửa"><ha-icon icon="mdi:lock"></ha-icon></div>
@@ -322,12 +332,37 @@ class VinFastDigitalTwin extends HTMLElement {
         .vf-speed.replaying { background: rgba(16, 185, 129, 0.1); border-color: #10b981; }
         .vf-speed.replaying span { color: #10b981; }
         
-        /* CỬA VÀ CỐP (DẠNG BLOCK TIÊU CHUẨN NẰM DƯỚI CẦN SỐ) */
+        /* CỬA VÀ CỐP BÁO ĐỘNG */
         .vf-doors-status { display: flex; gap: 8px; justify-content: center; width: 100%; flex-wrap: wrap; margin-bottom: 15px;}
         .door-badge { display: flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: bold; background: rgba(255,255,255,0.95); border: 1px solid #e5e7eb; box-shadow: 0 2px 6px rgba(0,0,0,0.1); color: #374151; transition: all 0.3s;}
+        
+        /* Cảnh báo Cửa mở (Đỏ) */
         .door-badge.open { background: #fee2e2; border-color: #ef4444; color: #b91c1c; animation: pulseRed 1.5s infinite; }
+        
+        /* Cảnh báo Quên khóa xe (Cam) */
+        .door-badge.open.warning { background: #fffbeb; border-color: #f59e0b; color: #d97706; animation: pulseOrange 2s infinite; }
+        
         .door-badge ha-icon { --mdc-icon-size: 15px; }
+        
         @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        @keyframes pulseOrange { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
+
+        /* GIAO DIỆN SẠC ĐỘNG NHẤP NHÁY */
+        .vf-charging-banner {
+            display: flex; align-items: center; justify-content: space-between;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; padding: 12px 18px; border-radius: 14px; margin-bottom: 16px;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); animation: pulseChargeGlow 2.5s infinite;
+        }
+        .charging-info { display: flex; flex-direction: column; }
+        .charging-title { font-size: 14px; font-weight: 800; display:flex; align-items:center; gap:6px; letter-spacing: 0.5px;}
+        .charging-title ha-icon { --mdc-icon-size: 18px; animation: bounceIcon 2s infinite; }
+        .charging-details { font-size: 12px; opacity: 0.9; margin-top: 3px;}
+        .charging-time-box { text-align: right; display: flex; flex-direction: column; justify-content: center;}
+        .charging-time { font-size: 20px; font-weight: 900; line-height: 1.1; font-family: monospace;}
+        
+        @keyframes pulseChargeGlow { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+        @keyframes bounceIcon { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
         /* THANH ĐIỀU KHIỂN TỪ XA */
         .vf-remote-bar { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; padding: 10px; background: rgba(243,244,246,0.5); border-radius: 16px;}
@@ -365,11 +400,12 @@ class VinFastDigitalTwin extends HTMLElement {
         .station-popup { font-family: sans-serif; }
         .station-popup h3 { margin: 0 0 5px 0; font-size: 14px; font-weight: bold; color: #111827; }
         .station-popup p { margin: 2px 0; font-size: 12px; color: #4b5563; }
+        
+        .leaflet-marker-icon.custom-directional-car { transition: transform 0.4s linear !important; }
       `;
       this.appendChild(style);
       this.content = true;
 
-      // SỰ KIỆN: Bấm vào Thẻ thông số để mở Popup Biểu đồ (More Info)
       this.querySelectorAll('.stat-box.clickable').forEach(box => {
           box.addEventListener('click', () => {
               const entityId = box.getAttribute('data-entity');
@@ -381,7 +417,6 @@ class VinFastDigitalTwin extends HTMLElement {
           });
       });
 
-      // GẮN SỰ KIỆN CHO NÚT ĐIỀU KHIỂN TỪ XA
       const callServiceBtn = (btnId, domain, service, entityId) => {
           const btn = this.querySelector(btnId);
           if(btn) {
@@ -524,9 +559,10 @@ class VinFastDigitalTwin extends HTMLElement {
 
     const name = getValidState(`sensor.${p}_ten_dinh_danh_xe`) || 'Xe VinFast';
     
-    // XỬ LÝ TRẠNG THÁI HOẠT ĐỘNG KÈM THỜI GIAN (VÍ DỤ: ĐANG ĐỖ TỪ 15 PHÚT TRƯỚC)
+    // TÍNH THỜI GIAN TRẠNG THÁI HIỆN TẠI (Time Ago)
     const statusObj = hass.states[`sensor.${p}_trang_thai_hoat_dong`];
-    let statusText = statusObj ? statusObj.state : 'N/A';
+    let statusTextRaw = statusObj ? statusObj.state : 'N/A';
+    let statusText = statusTextRaw;
     if (statusObj && statusObj.last_changed) {
         const timeStr = this.getTimeSince(statusObj.last_changed);
         if (timeStr !== 'vừa xong') {
@@ -546,12 +582,12 @@ class VinFastDigitalTwin extends HTMLElement {
     const trip = getValidState(`sensor.${p}_quang_duong_chuyen_di_trip`);
     const tripEnergy = getValidState(`sensor.${p}_dien_nang_tieu_thu_trip`);
 
+    this.querySelector('#vf-name').innerText = name;
+    this.querySelector('#vf-status-badge').innerText = statusText;
+    
     const odoRaw = getValidState(`sensor.${p}_tong_odo`);
     let odoClean = '--';
     if (odoRaw && !isNaN(odoRaw)) odoClean = Math.floor(parseFloat(odoRaw)).toString();
-
-    this.querySelector('#vf-name').innerText = name;
-    this.querySelector('#vf-status-badge').innerText = statusText; // Hiển thị Status kèm Thời gian
     this.querySelector('#vf-odo-int').innerText = odoClean;
     
     const renderStat = (id, val, unit) => {
@@ -601,6 +637,21 @@ class VinFastDigitalTwin extends HTMLElement {
     updateTire('#tire-rl', getValidState(`sensor.${p}_ap_suat_lop_sau_trai`)); 
     updateTire('#tire-rr', getValidState(`sensor.${p}_ap_suat_lop_sau_phai`));
 
+    // XỬ LÝ BANNER SẠC (Chỉ hiện khi cắm sạc)
+    const chargingBanner = this.querySelector('#vf-charging-banner');
+    const isCharging = statusTextRaw && statusTextRaw.toLowerCase().includes('sạc');
+    
+    if (isCharging) {
+        chargingBanner.style.display = 'flex';
+        const chargeLimit = getValidState(`sensor.${p}_gioi_han_sac_muc_tieu`);
+        const chargeTimeRemain = getValidState(`sensor.${p}_thoi_gian_sac_con_lai`);
+        
+        this.querySelector('#vf-charge-limit').innerText = (chargeLimit && chargeLimit !== 'unknown') ? `${chargeLimit}%` : '--%';
+        this.querySelector('#vf-charge-time').innerText = (chargeTimeRemain && chargeTimeRemain !== 'unknown') ? `${chargeTimeRemain} phút` : '--';
+    } else {
+        chargingBanner.style.display = 'none';
+    }
+
     const remoteBar = this.querySelector('#vf-remote-controls');
     const hasControls = ['khoa_cua', 'mo_cua', 'bam_coi', 'nhay_den'].some(cmd => hass.states[`button.${p}_${cmd}`] !== undefined);
     if (hasControls) {
@@ -609,22 +660,68 @@ class VinFastDigitalTwin extends HTMLElement {
         remoteBar.style.display = 'none';
     }
 
-    const getDoorStatus = (slug) => getValidState(`sensor.${p}_${slug}`) === 'Mở';
+    // ==============================================================
+    // LOGIC CẢNH BÁO AN NINH THÔNG MINH (ĐÃ FIX LỖI TÊN BIẾN/SLUG)
+    // ==============================================================
+    // Hàm kiểm tra trạng thái mảng linh hoạt
+    const checkSensorState = (slugs, targetState) => {
+        for (let s of slugs) {
+            const state = getValidState(`sensor.${p}_${s}`);
+            if (state && state.toLowerCase() === targetState.toLowerCase()) return true;
+        }
+        return false;
+    };
+
     const doorsConfig = [
-        { name: 'Cửa lái', open: getDoorStatus('cua_truoc_trai'), icon: 'mdi:car-door' },
-        { name: 'Cửa phụ', open: getDoorStatus('cua_truoc_phai'), icon: 'mdi:car-door' },
-        { name: 'Cửa sau T', open: getDoorStatus('cua_sau_trai'), icon: 'mdi:car-door' },
-        { name: 'Cửa sau P', open: getDoorStatus('cua_sau_phai'), icon: 'mdi:car-door' },
-        { name: 'Cốp sau', open: getDoorStatus('cop_sau'), icon: 'mdi:car-back' },
-        { name: 'Capo', open: getDoorStatus('nap_capo'), icon: 'mdi:car' }
+        { slugs: ['cua_truoc_trai', 'cua_tai_xe'], name: 'Cửa lái', icon: 'mdi:car-door' },
+        { slugs: ['cua_truoc_phai', 'cua_phu'], name: 'Cửa phụ', icon: 'mdi:car-door' },
+        { slugs: ['cua_sau_trai'], name: 'Cửa sau T', icon: 'mdi:car-door' },
+        { slugs: ['cua_sau_phai'], name: 'Cửa sau P', icon: 'mdi:car-door' },
+        { slugs: ['cop_sau'], name: 'Cốp sau', icon: 'mdi:car-back' },
+        { slugs: ['nap_capo', 'capo'], name: 'Capo', icon: 'mdi:car' },
+        { slugs: ['cua_so_tai_xe', 'cua_so_truoc_trai'], name: 'Kính lái', icon: 'mdi:window-open' },
+        { slugs: ['cua_so_phu', 'cua_so_truoc_phai'], name: 'Kính phụ', icon: 'mdi:window-open' },
+        { slugs: ['cua_so_sau_trai'], name: 'Kính sau T', icon: 'mdi:window-open' },
+        { slugs: ['cua_so_sau_phai'], name: 'Kính sau P', icon: 'mdi:window-open' }
     ];
-    const openDoors = doorsConfig.filter(d => d.open);
-    const doorsEl = this.querySelector('#vf-doors-container');
-    if (openDoors.length === 0) {
-        doorsEl.innerHTML = `<div class="door-badge" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3); background: rgba(255,255,255,0.7);"><ha-icon icon="mdi:shield-check-outline"></ha-icon> Đóng kín</div>`;
-    } else {
-        doorsEl.innerHTML = openDoors.map(d => `<div class="door-badge open"><ha-icon icon="${d.icon}"></ha-icon> ${d.name}</div>`).join('');
+
+    const openDoors = doorsConfig.filter(d => checkSensorState(d.slugs, 'mở'));
+    
+    // Kiểm tra Khóa tổng khi xe đang Đỗ
+    const isParked = statusTextRaw.toLowerCase().includes('đỗ') || gear.includes('P');
+    const isUnlocked = checkSensorState(['khoa_tong', 'khoa_cua'], 'mở khóa');
+    
+    // Kiểm tra cảnh báo lỗi hệ thống (Nếu có)
+    const errorSensors = ['canh_bao_loi', 'trang_thai_loi', 'loi_he_thong'];
+    let hasSystemError = false;
+    for (let s of errorSensors) {
+        const state = getValidState(`sensor.${p}_${s}`);
+        if (state && state.toLowerCase() !== 'bình thường' && state.toLowerCase() !== 'khong' && state !== '0' && state !== 'unknown') {
+            hasSystemError = state;
+            break;
+        }
     }
+
+    const doorsEl = this.querySelector('#vf-doors-container');
+    let securityHtml = '';
+
+    if (openDoors.length === 0 && (!isParked || !isUnlocked) && !hasSystemError) {
+        // NẾU TẤT CẢ AN TOÀN
+        securityHtml = `<div class="door-badge" style="color: #10b981; border-color: rgba(16, 185, 129, 0.3); background: rgba(255,255,255,0.7);"><ha-icon icon="mdi:shield-check-outline"></ha-icon> An toàn</div>`;
+    } else {
+        // CÓ LỖI HOẶC CẢNH BÁO
+        if (hasSystemError) {
+            securityHtml += `<div class="door-badge open" style="background: #fef2f2; border-color: #ef4444; color: #b91c1c;"><ha-icon icon="mdi:alert"></ha-icon> Lỗi: ${hasSystemError}</div>`;
+        }
+        if (openDoors.length > 0) {
+            securityHtml += openDoors.map(d => `<div class="door-badge open"><ha-icon icon="${d.icon}"></ha-icon> ${d.name}</div>`).join('');
+        }
+        if (isParked && isUnlocked) {
+            securityHtml += `<div class="door-badge open warning"><ha-icon icon="mdi:lock-open-alert"></ha-icon> Chưa khóa xe</div>`;
+        }
+    }
+    doorsEl.innerHTML = securityHtml;
+    // ==============================================================
 
     ['P','R','N','D'].forEach(g => {
       const el = this.querySelector(`#gear-${g}`);
@@ -648,6 +745,7 @@ class VinFastDigitalTwin extends HTMLElement {
     
     if (this._map && lat && lon) {
       if (!this._isReplaying) {
+          this._marker.setOpacity(1); 
           this._marker.setIcon(this.getCarIcon(0, null));
           this._marker.setLatLng([lat, lon]);
       }
