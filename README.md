@@ -1,7 +1,9 @@
 🚗 VinFast Digital Twin Card cho Home Assistant
 VinFast Digital Twin Card là một thẻ giao diện tùy chỉnh (Custom Lovelace Card) siêu việt dành riêng cho hệ sinh thái xe điện VinFast trên Home Assistant. Giao diện được thiết kế lấy cảm hứng từ màn hình trung tâm của Tesla và Rivian, mang đến trải nghiệm thị giác tuyệt đẹp và dữ liệu viễn trắc thời gian thực.
 
-⚠️ YÊU CẦU BẮT BUỘC: Card này chỉ là phần Giao diện (Frontend). Để Card hoạt động và có dữ liệu, bạn BẮT BUỘC phải cài đặt lõi xử lý VinFast Smart Integration (Backend) trước.
+⚠️ YÊU CẦU BẮT BUỘC: Card này chỉ là phần Giao diện (Frontend). Để Card hoạt động và có dữ liệu, bạn BẮT BUỘC phải cài đặt lõi xử lý VinFast Connected Car Integration (Backend) trước.
+
+https://github.com/thangnd85/vinfast-connected-car
 
 ✨ Tính năng Nổi bật
 Thẻ được thiết kế thành một khối liền mạch (All-in-One), sử dụng công nghệ Web Components cực nhẹ, không gây giật lag cho thiết bị:
