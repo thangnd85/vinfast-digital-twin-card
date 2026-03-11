@@ -37,6 +37,20 @@ class VinFastDigitalTwin extends HTMLElement {
     document.head.appendChild(script);
   }
 
+  async fetchChargeHistory(vin) {
+      if (!vin) return;
+      try {
+          const res = await fetch(`/local/vinfast_charge_history_${vin.toLowerCase()}.json?v=${new Date().getTime()}`);
+          if (res.ok) {
+              this._chargeHistoryData = await res.json();
+              const box = this.querySelector('#box-charge');
+              if (box && box.classList.contains('active-box')) {
+                  this.renderChargeHistory();
+              }
+          }
+      } catch(e) {}
+  }
+
   async fetchBackendState(vin) {
       if (!vin) return;
       try {
@@ -52,7 +66,7 @@ class VinFastDigitalTwin extends HTMLElement {
                       powerEl.innerText = pwr > 0 ? `${pwr} kW` : 'Đang tính...';
                   }
 
-                  if (this._backendData.api_charge_history_list) {
+                  if (this._backendData.api_charge_history_list && (!this._chargeHistoryData || this._chargeHistoryData.length === 0)) {
                       try { this._chargeHistoryData = JSON.parse(this._backendData.api_charge_history_list); } catch(e){}
                   }
 
@@ -155,8 +169,9 @@ class VinFastDigitalTwin extends HTMLElement {
           this.querySelector('#vf-suggest-power').innerText = bestStation.power;
           this.querySelector('#vf-suggest-avail').innerText = `${bestStation.avail}/${bestStation.total}`;
           
-          // ĐÃ SỬA LẠI THÀNH ĐƯỜNG DẪN GOOGLE MAPS DIR API CHUẨN
-          const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${this._lastLat},${this._lastLon}&destination=${bestStation.lat},${bestStation.lng}&travelmode=driving`;
+          const mapDomain = 'https://' + 'www.google.com' + '/maps/dir/?api=1';
+          const navUrl = mapDomain + '&origin=' + this._lastLat + ',' + this._lastLon + '&destination=' + bestStation.lat + ',' + bestStation.lng + '&travelmode=driving';
+          
           const btnNav = this.querySelector('#btn-suggest-nav');
           if (btnNav) btnNav.onclick = () => window.open(navUrl, '_blank');
           
@@ -196,9 +211,9 @@ class VinFastDigitalTwin extends HTMLElement {
                   iconSize: [pinWidth, 26], iconAnchor: [pinWidth / 2, 13] 
               });
 
-              // ĐÃ SỬA LẠI THÀNH ĐƯỜNG DẪN GOOGLE MAPS DIR API CHUẨN
-              let originParam = (this._lastLat && this._lastLon) ? `origin=${this._lastLat},${this._lastLon}&` : '';
-              const navUrl = `https://www.google.com/maps/dir/?api=1&${originParam}destination=${st.lat},${st.lng}&travelmode=driving`;
+              const mapDomain = 'https://' + 'www.google.com' + '/maps/dir/?api=1';
+              let originParam = (this._lastLat && this._lastLon) ? '&origin=' + this._lastLat + ',' + this._lastLon : '';
+              const navUrl = mapDomain + originParam + '&destination=' + st.lat + ',' + st.lng + '&travelmode=driving';
 
               const popupContent = `
                   <div style="font-family:sans-serif; min-width: 170px;">
@@ -263,6 +278,7 @@ class VinFastDigitalTwin extends HTMLElement {
       if (!this.content) {
         this.loadLeaflet();
         this.fetchTripHistory(vinStr);
+        this.fetchChargeHistory(vinStr); 
         
         this.innerHTML = `
           <ha-card class="vf-card">
@@ -292,11 +308,14 @@ class VinFastDigitalTwin extends HTMLElement {
               <div class="vf-doors-status" id="vf-doors-container"></div>
               
               <div class="vf-charging-banner" id="vf-charging-banner" style="display: none;">
-                  <div class="charging-info">
+                  <div class="charging-left">
                       <div class="charging-title"><ha-icon icon="mdi:ev-plug-type2"></ha-icon><span id="vf-charge-status-text">Hệ thống đang sạc</span></div>
-                      <div class="charging-details">Giới hạn: <span id="vf-charge-limit">--%</span><span style="margin:0 6px;opacity:0.5;">|</span>Công suất: <span id="vf-charge-power">-- kW</span></div>
+                      <div class="charging-details">Giới hạn: <span id="vf-charge-limit" style="font-weight:bold; margin-left:4px;">--%</span><span style="margin:0 8px;opacity:0.5;">|</span>Công suất: <span id="vf-charge-power" style="font-weight:bold; margin-left:4px;">-- kW</span></div>
                   </div>
-                  <div class="charging-time-box"><span id="vf-charge-time" class="charging-time">--</span><span style="font-size:11px;opacity:0.8;">còn lại</span></div>
+                  <div class="charging-right">
+                      <span id="vf-charge-time" class="charging-time">--</span>
+                      <div class="charging-time-label"><span>phút</span><span>còn lại</span></div>
+                  </div>
               </div>
 
               <div class="vf-remote-bar" id="vf-remote-controls" style="display: none;">
@@ -307,15 +326,20 @@ class VinFastDigitalTwin extends HTMLElement {
               </div>
 
               <div class="vf-stats-grid">
+                
                 <div class="stat-box clickable" id="box-batt">
-                  <ha-icon icon="mdi:battery-charging-60" style="color: #10b981;"></ha-icon>
-                  <div class="stat-info"><div class="stat-label">Mức Pin</div><div class="stat-val" id="vf-stat-batt">--</div></div>
+                  <div class="box-main">
+                    <ha-icon icon="mdi:battery-charging-60" style="color: #10b981;"></ha-icon>
+                    <div class="stat-info"><div class="stat-label">MỨC PIN</div><div class="stat-val" id="vf-stat-batt">--</div></div>
+                  </div>
                 </div>
                 <div class="stat-box clickable" id="box-range">
-                  <ha-icon icon="mdi:map-marker-distance" style="color: #3b82f6;"></ha-icon>
-                  <div class="stat-info"><div class="stat-label">Phạm vi</div><div class="stat-val" id="vf-stat-range">--</div></div>
+                  <div class="box-main">
+                    <ha-icon icon="mdi:map-marker-distance" style="color: #3b82f6;"></ha-icon>
+                    <div class="stat-info"><div class="stat-label">PHẠM VI</div><div class="stat-val" id="vf-stat-range">--</div></div>
+                  </div>
                 </div>
-                
+
                 <div class="stat-detail-container" id="detail-container-1">
                     <div class="stat-detail-content" id="detail-batt">
                         <div class="detail-row"><span>Sức khỏe Pin (SOH):</span> <b id="dt-soh" style="color:#10b981;">--</b></div>
@@ -329,18 +353,47 @@ class VinFastDigitalTwin extends HTMLElement {
                 </div>
 
                 <div class="stat-box clickable" id="box-eff">
-                  <ha-icon icon="mdi:leaf" style="color: #10b981;"></ha-icon>
-                  <div class="stat-info"><div class="stat-label" id="lbl-eff">Hiệu suất TB</div><div class="stat-val" id="vf-stat-eff">--</div></div>
+                  <div class="box-main">
+                    <ha-icon icon="mdi:leaf" style="color: #10b981;"></ha-icon>
+                    <div class="stat-info"><div class="stat-label" id="lbl-eff">HIỆU SUẤT TB</div><div class="stat-val" id="vf-stat-eff">--</div></div>
+                  </div>
                 </div>
-                <div class="stat-box clickable" id="box-charge">
-                  <ha-icon icon="mdi:ev-station" style="color: #f59e0b;"></ha-icon>
-                  <div class="stat-info"><div class="stat-label">Số lần sạc</div><div class="stat-val" id="vf-stat-charge-count">--</div></div>
+                <div class="stat-box clickable" id="box-speed">
+                  <div class="box-main">
+                    <ha-icon icon="mdi:chart-bell-curve" style="color: #eab308;"></ha-icon>
+                    <div class="stat-info"><div class="stat-label">TỐC ĐỘ TỐI ƯU</div><div class="stat-val" id="vf-stat-speed">--</div></div>
+                  </div>
                 </div>
-                
+
                 <div class="stat-detail-container" id="detail-container-2">
                     <div class="stat-detail-content" id="detail-eff">
                         <div class="detail-row"><span>Tổng điện vòng đời:</span> <b id="dt-total-kwh" style="color:#f59e0b;">--</b></div>
                         <div class="detail-row"><span>Tổng tiền sạc:</span> <b id="dt-total-cost">--</b></div>
+                    </div>
+                    <div class="stat-detail-content" id="detail-speed">
+                        <div style="font-size:10px; color:#64748b; margin-bottom:6px;">Phân tích theo dải tốc độ:</div>
+                        <div id="dt-speed-chart" style="display:flex; flex-direction:column; gap:4px;">Chưa đủ dữ liệu AI</div>
+                    </div>
+                </div>
+
+                <div class="stat-box clickable" id="box-trip">
+                  <div class="box-main">
+                    <ha-icon icon="mdi:map-marker-path" style="color: #8b5cf6;"></ha-icon>
+                    <div class="stat-info"><div class="stat-label">TRIP HIỆN TẠI</div><div class="stat-val" id="vf-stat-trip">--</div></div>
+                  </div>
+                </div>
+                <div class="stat-box clickable" id="box-charge" style="background:rgba(251, 191, 36, 0.1); border-color:rgba(245, 158, 11, 0.3);">
+                  <div class="box-main">
+                    <ha-icon icon="mdi:ev-station" style="color: #f59e0b;"></ha-icon>
+                    <div class="stat-info"><div class="stat-label">LỊCH SỬ SẠC</div><div class="stat-val" id="vf-stat-charge-count">--</div></div>
+                  </div>
+                </div>
+
+                <div class="stat-detail-container" id="detail-container-3">
+                    <div class="stat-detail-content" id="detail-trip">
+                        <div class="detail-row"><span>Từ:</span> <b id="dt-trip-start" style="color:#64748b; font-size:11px;">--</b></div>
+                        <div class="detail-row"><span>Tốc độ trung bình:</span> <b id="dt-trip-avg-speed">--</b></div>
+                        <div class="detail-row"><span>Tiêu thụ chuyến:</span> <b id="dt-trip-energy" style="color:#eab308;">--</b></div>
                     </div>
                     <div class="stat-detail-content" id="detail-charge" style="padding:0; overflow:hidden;">
                         <div style="padding:15px; border-bottom:1px solid #e2e8f0; display:flex; gap:10px; background:#f8fafc;">
@@ -359,27 +412,6 @@ class VinFastDigitalTwin extends HTMLElement {
                     </div>
                 </div>
 
-                <div class="stat-box clickable" id="box-trip">
-                  <ha-icon icon="mdi:map-marker-path" style="color: #8b5cf6;"></ha-icon>
-                  <div class="stat-info"><div class="stat-label">Trip hiện tại</div><div class="stat-val" id="vf-stat-trip">--</div></div>
-                </div>
-                <div class="stat-box clickable" id="box-speed">
-                  <ha-icon icon="mdi:chart-bell-curve" style="color: #eab308;"></ha-icon>
-                  <div class="stat-info"><div class="stat-label">Tốc độ tối ưu</div><div class="stat-val" id="vf-stat-speed">--</div></div>
-                </div>
-                
-                <div class="stat-detail-container" id="detail-container-3">
-                    <div class="stat-detail-content" id="detail-trip">
-                        <div class="detail-row"><span>Từ:</span> <b id="dt-trip-start" style="color:#64748b; font-size:11px;">--</b></div>
-                        <div class="detail-row"><span>Tốc độ trung bình:</span> <b id="dt-trip-avg-speed">--</b></div>
-                        <div class="detail-row"><span>Tiêu thụ chuyến:</span> <b id="dt-trip-energy" style="color:#eab308;">--</b></div>
-                    </div>
-                    <div class="stat-detail-content" id="detail-speed">
-                        <div style="font-size:11px; color:#64748b; margin-bottom:8px; text-align:center;">Phân tích hiệu suất theo dải tốc độ</div>
-                        <div id="dt-speed-chart" style="display:flex; flex-direction:column; gap:6px;">Chưa đủ dữ liệu AI</div>
-                    </div>
-                </div>
-                
               </div> <div id="vf-ai-advisor-container" style="display: none; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); border-radius: 16px; padding: 15px; margin-bottom: 15px; color: white; box-shadow: 0 4px 15px rgba(37,99,235,0.2);">
                   <div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
                       <ha-icon icon="mdi:robot-outline" style="color: #60a5fa;"></ha-icon>
@@ -445,31 +477,34 @@ class VinFastDigitalTwin extends HTMLElement {
           .door-badge ha-icon { --mdc-icon-size: 15px; }
           @keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
           @keyframes pulseOrange { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); } 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); } }
-          .vf-charging-banner { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 12px 18px; border-radius: 14px; margin-bottom: 16px; animation: pulseChargeGlow 2.5s infinite;}
-          .charging-title { font-size: 14px; font-weight: 800; display:flex; align-items:center; gap:6px;}
-          .charging-details { font-size: 12px; margin-top: 3px; display:flex; align-items:center;}
-          .charging-time { font-size: 20px; font-weight: 900; font-family: monospace;}
+          
+          .vf-charging-banner { display: flex; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 15px 20px; border-radius: 16px; margin-bottom: 16px; animation: pulseChargeGlow 2.5s infinite; }
+          .charging-left { display: flex; flex-direction: column; gap: 4px; }
+          .charging-title { font-size: 15px; font-weight: 800; display:flex; align-items:center; gap:8px; line-height: 1.2;}
+          .charging-title ha-icon { --mdc-icon-size: 20px; }
+          .charging-details { font-size: 12px; display:flex; align-items:center; opacity: 0.9;}
+          .charging-right { display: flex; align-items: baseline; gap: 4px; text-align: right;}
+          .charging-time { font-size: 28px; font-weight: 900; line-height: 1;}
+          .charging-time-label { font-size: 11px; display: flex; flex-direction: column; text-align: left; line-height: 1.2; opacity: 0.9;}
+          
           @keyframes pulseChargeGlow { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
           .vf-remote-bar { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; padding: 10px; background: rgba(243,244,246,0.5); border-radius: 16px;}
           .remote-btn { display: flex; align-items: center; justify-content: center; width: 45px; height: 45px; background: white; border: 1px solid #e5e7eb; border-radius: 50%; color: #4b5563; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s ease;}
           .remote-btn ha-icon { --mdc-icon-size: 22px; } .remote-btn:hover { background: #eff6ff; color: #2563eb; transform: translateY(-2px);}
           
-          /* ======================================================= */
-          /* THIẾT KẾ GRID MỚI: 2 CỘT TĨNH. DETAIL MỞ XUỐNG DƯỚI */
-          /* ======================================================= */
           .vf-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
           
           .stat-box { display: flex; align-items: center; gap: 8px; background: rgba(243, 244, 246, 0.6); padding: 10px; border-radius: 12px; border: 1px solid rgba(229, 231, 235, 0.8); transition: all 0.2s; cursor: pointer; height: 60px; box-sizing: border-box; }
           .stat-box:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); background: white; }
           .stat-box.active-box { border-color: #2563eb; background: white; box-shadow: 0 4px 12px rgba(37,99,235,0.15); transform: translateY(-2px); }
           
-          .stat-box ha-icon { flex-shrink: 0; --mdc-icon-size: 22px; }
-          .stat-info { display: flex; flex-direction: column; min-width: 0; width: 100%; justify-content: center; }
+          .box-main { display: flex; align-items: center; gap: 8px; width: 100%; }
+          .box-main ha-icon { flex-shrink: 0; --mdc-icon-size: 22px; }
+          .stat-info { display: flex; flex-direction: column; min-width: 0; width: 100%; justify-content: center; overflow: hidden;}
           .stat-label { font-size: 10px; font-weight: 700; color: #6b7280; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; transition: color 0.3s;}
           .stat-val { font-size: 15px; font-weight: 800; color: #1f2937; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
           .stat-unit { font-size: 0.7em; font-weight: 600; color: #6b7280; margin-left: 3px; }
           
-          /* CONTAINER ẨN CHIẾM 2 CỘT */
           .stat-detail-container { grid-column: 1 / -1; display: none; animation: slideDown 0.2s ease-out; transform-origin: top; margin-top: -5px; }
           .stat-detail-content { background: #f8fafc; border-radius: 12px; padding: 15px; border: 1px solid #93c5fd; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); display: none; }
           
@@ -486,9 +521,6 @@ class VinFastDigitalTwin extends HTMLElement {
         this.appendChild(style);
         this.content = true;
 
-        // =========================================================
-        // THUẬT TOÁN ĐÓNG/MỞ CHI TIẾT ĐÃ ĐƯỢC FIX LỖI TRUYỀN ID
-        // =========================================================
         this.toggleExpand = (boxId, detailId, containerId) => {
             const box = this.querySelector(boxId);
             const detail = this.querySelector(detailId);
@@ -498,21 +530,15 @@ class VinFastDigitalTwin extends HTMLElement {
             
             const isExpanded = box.classList.contains('active-box');
             
-            // 1. Tắt tất cả viền xanh
-            this.querySelectorAll('.stat-box').forEach(el => {
-                el.classList.remove('active-box');
-            });
-            // 2. Đóng tất cả container và detail
+            this.querySelectorAll('.stat-box').forEach(el => el.classList.remove('active-box'));
             this.querySelectorAll('.stat-detail-container').forEach(el => el.style.display = 'none');
             this.querySelectorAll('.stat-detail-content').forEach(el => el.style.display = 'none');
             
-            // 3. Mở nếu chưa mở
             if (!isExpanded) {
                 box.classList.add('active-box');
                 container.style.display = 'block';
                 detail.style.display = 'block';
                 
-                // Render List Sạc nếu đang mở thẻ sạc
                 if (boxId === '#box-charge') {
                     this.renderChargeHistory();
                 }
@@ -549,39 +575,43 @@ class VinFastDigitalTwin extends HTMLElement {
             listEl.innerHTML = html;
         };
 
-        // Gắn sự kiện click. Đã fix đúng ID container tương ứng với HTML
-        this.querySelector('#box-batt')?.addEventListener('click', () => this.toggleExpand('#box-batt', '#detail-batt', '#detail-container-1'));
-        this.querySelector('#box-range')?.addEventListener('click', () => this.toggleExpand('#box-range', '#detail-range', '#detail-container-1'));
+        const attachClick = (boxId, detailId, containerId) => {
+            const el = this.querySelector(boxId);
+            if (el) el.onclick = () => this.toggleExpand(boxId, detailId, containerId);
+        };
         
-        this.querySelector('#box-eff')?.addEventListener('click', () => this.toggleExpand('#box-eff', '#detail-eff', '#detail-container-2'));
-        this.querySelector('#box-charge')?.addEventListener('click', () => this.toggleExpand('#box-charge', '#detail-charge', '#detail-container-2'));
-        
-        this.querySelector('#box-trip')?.addEventListener('click', () => this.toggleExpand('#box-trip', '#detail-trip', '#detail-container-3'));
-        this.querySelector('#box-speed')?.addEventListener('click', () => this.toggleExpand('#box-speed', '#detail-speed', '#detail-container-3'));
+        attachClick('#box-batt', '#detail-batt', '#detail-container-1');
+        attachClick('#box-range', '#detail-range', '#detail-container-1');
+        attachClick('#box-eff', '#detail-eff', '#detail-container-2');
+        attachClick('#box-speed', '#detail-speed', '#detail-container-2'); 
+        attachClick('#box-trip', '#detail-trip', '#detail-container-3');
+        attachClick('#box-charge', '#detail-charge', '#detail-container-3'); 
 
-        this.querySelector('#btn-locate')?.addEventListener('click', () => { 
+        const btnLocate = this.querySelector('#btn-locate');
+        if (btnLocate) btnLocate.onclick = () => { 
           if(this._map && this._lastLat) this._map.setView([this._lastLat, this._lastLon], 15, {animate: true});
-        });
+        };
 
-        this.querySelector('#btn-stations')?.addEventListener('click', () => {
+        const btnStations = this.querySelector('#btn-stations');
+        if (btnStations) btnStations.onclick = () => {
           this._hass.callService('button', 'press', { entity_id: `button.${p}_tim_tram_sac` });
-        });
+        };
         
         const btnFilter = this.querySelector('#btn-filter-station');
         if(btnFilter) {
-            btnFilter.addEventListener('click', () => {
+            btnFilter.onclick = () => {
                 if (this._stationFilter === 'ALL') { this._stationFilter = 'DC'; btnFilter.innerText = 'DC'; btnFilter.style.color = '#dc2626'; }
                 else if (this._stationFilter === 'DC') { this._stationFilter = 'AC'; btnFilter.innerText = 'AC'; btnFilter.style.color = '#16a34a'; }
                 else { this._stationFilter = 'ALL'; btnFilter.innerText = 'ALL'; btnFilter.style.color = '#f59e0b'; }
                 this.renderStations();
-            });
+            };
         }
 
         const callServiceBtn = (btnId, domain, service, entityId) => {
             const btn = this.querySelector(btnId);
-            if(btn) btn.addEventListener('click', () => {
+            if(btn) btn.onclick = () => {
                 if(this._hass.states[entityId]) this._hass.callService(domain, service, { entity_id: entityId });
-            });
+            };
         };
         callServiceBtn('#btn-rc-lock', 'button', 'press', `button.${p}_khoa_cua`);
         callServiceBtn('#btn-rc-unlock', 'button', 'press', `button.${p}_mo_cua`);
@@ -590,7 +620,7 @@ class VinFastDigitalTwin extends HTMLElement {
 
         const selectEl = this.querySelector('#trip-selector');
         if(selectEl) {
-            selectEl.addEventListener('change', (e) => {
+            selectEl.onchange = (e) => {
                 const val = e.target.value;
                 let rawPoints = [];
                 if (val === "current") {
@@ -608,14 +638,14 @@ class VinFastDigitalTwin extends HTMLElement {
                     this._polyline.setLatLngs(this._selectedRouteCoords);
                     if (this._selectedRouteCoords.length > 1) this._map.fitBounds(this._polyline.getBounds(), {padding: [30, 30]});
                 }
-            });
+            };
         }
 
         const btnReplay = this.querySelector('#btn-replay');
         const iconReplay = this.querySelector('#icon-replay');
         
         if(btnReplay && iconReplay) {
-            btnReplay.addEventListener('click', () => {
+            btnReplay.onclick = () => {
                 if (!this._map || !this._marker || !this._polyline) return;
                 if (this._selectedRouteCoords.length < 2) return alert("Lộ trình quá ngắn!");
 
@@ -668,14 +698,19 @@ class VinFastDigitalTwin extends HTMLElement {
                         currentIdx++;
                     }, 250); 
                 }
-            });
+            };
         }
       }
 
-      // KHAI BÁO BIẾN TRACKER Ở ĐÂY ĐỂ ĐẢM BẢO KHÔNG BỊ UNDEFINED
-      const tracker = hass.states[`device_tracker.${p}_vi_tri_gps`];
-      const lat = tracker?.attributes?.latitude;
-      const lon = tracker?.attributes?.longitude;
+      let trackerLat = null;
+      let trackerLon = null;
+      const trackerObj = hass.states[`device_tracker.${p}_vi_tri_gps`];
+      if (trackerObj && trackerObj.attributes) {
+          trackerLat = trackerObj.attributes.latitude;
+          trackerLon = trackerObj.attributes.longitude;
+      }
+      const lat = trackerLat;
+      const lon = trackerLon;
 
       const name = getValidState(`sensor.${p}_ten_dinh_danh_xe`) || 'Xe VinFast';
       const statusObj = hass.states[`sensor.${p}_trang_thai_hoat_dong`];
@@ -793,19 +828,24 @@ class VinFastDigitalTwin extends HTMLElement {
       }
 
       const chargingBanner = this.querySelector('#vf-charging-banner');
-      const isCharging = statusTextRaw && statusTextRaw.toLowerCase().includes('sạc');
+      const isCharging = statusTextRaw && (statusTextRaw.toLowerCase().includes('sạc') || statusTextRaw.toLowerCase().includes('hoàn tất'));
       
-      if (isCharging && chargingBanner) {
+      if (isCharging && chargingBanner && !statusTextRaw.toLowerCase().includes('không')) {
           chargingBanner.style.display = 'flex';
-          let targetSensor = getValidState(`sensor.${p}_gioi_han_sac_muc_tieu`);
-          let chargeLimit = (targetSensor && targetSensor !== 'unknown') ? targetSensor : '100';
+          
+          let chargeLimit = this._backendData.api_target_charge_limit;
+          if (!chargeLimit || chargeLimit === 0 || chargeLimit === '0') {
+              chargeLimit = getValidState(`sensor.${p}_gioi_han_sac_muc_tieu`) || getValidState(`sensor.${p}_muc_tieu_sac_target`) || '--';
+          }
           const chargeTimeRemain = getValidState(`sensor.${p}_thoi_gian_sac_con_lai`);
           
           const chargeLimitEl = this.querySelector('#vf-charge-limit');
           const chargeTimeEl = this.querySelector('#vf-charge-time');
+          const chargeStatusTextEl = this.querySelector('#vf-charge-status-text');
           
-          if (chargeLimitEl) chargeLimitEl.innerText = `${chargeLimit}%`;
-          if (chargeTimeEl) chargeTimeEl.innerText = (chargeTimeRemain && chargeTimeRemain !== 'unknown') ? `${chargeTimeRemain} phút` : '--';
+          if (chargeLimitEl) chargeLimitEl.innerText = chargeLimit !== '--' ? `${chargeLimit}%` : '--';
+          if (chargeTimeEl) chargeTimeEl.innerText = (chargeTimeRemain && chargeTimeRemain !== 'unknown') ? `${chargeTimeRemain}` : '--';
+          if (chargeStatusTextEl) chargeStatusTextEl.innerText = statusTextRaw.includes('đầy') ? "Đã sạc đầy" : "Hệ thống đang sạc";
           
           if (!this._powerFetchTimer) {
               this.fetchBackendState(vinStr);
