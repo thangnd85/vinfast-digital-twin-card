@@ -19,11 +19,15 @@ class VinFastDigitalTwin extends HTMLElement {
     this._selectedRouteCoords = []; 
     this._stationFilter = 'ALL'; 
     this._currentStations = []; 
+    this._prevStationStr = null;
     this._chargeHistoryData = [];
     
     this._effToggleTimer = null;
     this._effToggleState = false;
     this._entityPrefix = null; 
+    
+    // Biến lưu trữ tin nhắn AI cuối cùng để tự động mở rộng khi có tin mới
+    this._lastAiMessage = ""; 
   }
 
   loadLeaflet() {
@@ -60,7 +64,7 @@ class VinFastDigitalTwin extends HTMLElement {
 
   cleanRouteData(points) {
       if (!points || !Array.isArray(points) || points.length === 0) return [];
-      return points.map(p => [p[0], p[1]]); 
+      return points.map(p => [p[0], p[1], p[2] || 0]); 
   }
 
   renderEmptyTripSelector() {
@@ -147,12 +151,17 @@ class VinFastDigitalTwin extends HTMLElement {
       if (!Array.isArray(this._currentStations)) return;
 
       this._currentStations.forEach(st => {
-          if (st.dist > 15.0) return; 
           const isDC = st.power >= 20;
           if (this._stationFilter === 'DC' && !isDC) return;
           if (this._stationFilter === 'AC' && isDC) return;
 
           if (st.lat && st.lng) {
+              let exactDist = st.dist; 
+              if (this._lastLat && this._lastLon) {
+                  let distMeters = this._map.distance([this._lastLat, this._lastLon], [st.lat, st.lng]);
+                  exactDist = (distMeters / 1000).toFixed(1); 
+              }
+
               let ratio = st.total > 0 ? (st.avail / st.total) * 100 : 0;
               let pinColor = '', statusText = '';
               if (st.total === 0 || st.avail === 0) { pinColor = '#dc2626'; statusText = 'Hết chỗ'; }
@@ -179,7 +188,7 @@ class VinFastDigitalTwin extends HTMLElement {
                   <div style="font-family:sans-serif; min-width: 170px;">
                       <b style="font-size: 13px; color: #1e3a8a;">${st.name}</b><br>
                       <div style="margin-top: 6px; font-size: 12px;">
-                          🚗 Cách xe: <b>${st.dist} km</b><br>
+                          🚗 Cách xe: <b style="color: #ef4444;">${exactDist} km</b><br>
                           ⚡ Công suất: <b>${st.power} kW</b><br>
                           🔌 Trụ trống: <b style="color:${pinColor}; font-size:14px;">${st.avail} / ${st.total}</b>
                       </div>
@@ -200,7 +209,7 @@ class VinFastDigitalTwin extends HTMLElement {
     
     this._map = L.map(mapEl, { zoomControl: false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(this._map);
-    this._marker = L.marker([0, 0], {icon: this.getCarIcon(0, null), opacity: 0}).addTo(this._map);
+    this._marker = L.marker([0, 0], {icon: this.getCarIcon(0, 0), opacity: 0}).addTo(this._map);
     this._polyline = L.polyline([], {color: '#2563eb', weight: 4, opacity: 0.8}).addTo(this._map);
     this._stationLayer = L.layerGroup().addTo(this._map);
     
@@ -379,14 +388,20 @@ class VinFastDigitalTwin extends HTMLElement {
                       <div id="vf-inline-charge-list" style="max-height: 200px; overflow-y: auto; background:white; padding:0 15px 10px 15px;"></div>
                   </div>
               </div>
-
-            </div> <div id="vf-ai-advisor-container" style="display: none; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); border-radius: 16px; padding: 15px; margin-bottom: 15px; color: white; box-shadow: 0 4px 15px rgba(37,99,235,0.2);">
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
-                    <ha-icon icon="mdi:robot-outline" style="color: #60a5fa;"></ha-icon>
-                    Chuyên gia AI Đánh giá
+            </div> 
+            
+            <div id="vf-ai-advisor-container" style="display: none; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); border-radius: 16px; padding: 15px; margin-bottom: 15px; color: white; box-shadow: 0 4px 15px rgba(37,99,235,0.2); transition: all 0.3s ease;">
+                <div id="vf-ai-header" style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: bold; font-size: 14px;">
+                        <ha-icon icon="mdi:robot-outline" style="color: #60a5fa;"></ha-icon>
+                        Chuyên gia AI Đánh giá
+                    </div>
+                    <ha-icon id="vf-ai-chevron" icon="mdi:chevron-up" style="transition: transform 0.3s ease;"></ha-icon>
                 </div>
-                <div id="vf-ai-text" style="font-size: 12px; line-height: 1.5; color: #e2e8f0; font-style: italic;">
-                    Đang chờ phân tích chuyến đi...
+                <div id="vf-ai-content" style="max-height: 200px; margin-top: 8px; overflow: hidden; transition: all 0.3s ease;">
+                    <div id="vf-ai-text" style="font-size: 12px; line-height: 1.5; color: #e2e8f0; font-style: italic;">
+                        Đang chờ phân tích chuyến đi...
+                    </div>
                 </div>
             </div>
 
@@ -406,7 +421,7 @@ class VinFastDigitalTwin extends HTMLElement {
               <div class="map-controls">
                 <button class="map-btn" id="btn-locate"><ha-icon icon="mdi:crosshairs-gps"></ha-icon></button>
                 <div style="height:1px;background:#ccc;margin:4px 0;"></div>
-                <button class="map-btn" id="btn-stations"><ha-icon icon="mdi:refresh" style="color:#2563eb;"></ha-icon></button>
+                <button class="map-btn" id="btn-stations"><ha-icon icon="mdi:ev-station" style="color:#2563eb;"></ha-icon></button>
                 <button class="map-btn" id="btn-filter-station" style="font-weight:900; font-size:11px; color:#f59e0b;">ALL</button>
                 <div style="height:1px;background:#ccc;margin:4px 0;"></div>
                 <button class="map-btn" id="btn-replay"><ha-icon id="icon-replay" icon="mdi:play-circle" style="color:#2563eb;"></ha-icon></button>
@@ -489,6 +504,26 @@ class VinFastDigitalTwin extends HTMLElement {
       this.appendChild(style);
       this.content = true;
 
+      // XỬ LÝ SỰ KIỆN CLICK CHO THẺ AI ĐỂ THU/MỞ
+      const aiHeader = this.querySelector('#vf-ai-header');
+      const aiContent = this.querySelector('#vf-ai-content');
+      const aiChevron = this.querySelector('#vf-ai-chevron');
+
+      if (aiHeader) {
+          aiHeader.onclick = () => {
+              const isCollapsed = aiContent.style.maxHeight === '0px';
+              if (isCollapsed) {
+                  aiContent.style.maxHeight = '200px'; 
+                  aiContent.style.marginTop = '8px';
+                  aiChevron.style.transform = 'rotate(0deg)';
+              } else {
+                  aiContent.style.maxHeight = '0px';
+                  aiContent.style.marginTop = '0px';
+                  aiChevron.style.transform = 'rotate(180deg)';
+              }
+          };
+      }
+
       this.toggleExpand = (boxId, detailId, containerId) => {
           const box = this.querySelector(boxId);
           const detail = this.querySelector(detailId);
@@ -558,9 +593,27 @@ class VinFastDigitalTwin extends HTMLElement {
       };
 
       const btnStations = this.querySelector('#btn-stations');
-      if (btnStations) btnStations.onclick = () => {
-        this._hass.callService('button', 'press', { entity_id: `button.${p}_force_ping` });
-      };
+      if (btnStations) {
+          btnStations.onclick = () => {
+              this.renderStations();
+              
+              if (this._map && this._currentStations && this._currentStations.length > 0) {
+                  const lats = this._currentStations.map(s => s.lat);
+                  const lngs = this._currentStations.map(s => s.lng);
+                  if (this._lastLat && this._lastLon) {
+                      lats.push(this._lastLat);
+                      lngs.push(this._lastLon);
+                  }
+                  
+                  const bounds = [
+                      [Math.min(...lats), Math.min(...lngs)],
+                      [Math.max(...lats), Math.max(...lngs)]
+                  ];
+                  
+                  this._map.fitBounds(bounds, {padding: [40, 40], maxZoom: 15});
+              }
+          };
+      }
       
       const btnFilter = this.querySelector('#btn-filter-station');
       if(btnFilter) {
@@ -596,12 +649,14 @@ class VinFastDigitalTwin extends HTMLElement {
               } else {
                   rawPoints = this._tripHistory[parseInt(val)]?.route || [];
               }
+              
               this._selectedRouteCoords = this.cleanRouteData(rawPoints);
               this._currentPolylineString = JSON.stringify(this._selectedRouteCoords);
               
               if(this._polyline) {
-                  this._polyline.setLatLngs(this._selectedRouteCoords);
-                  if (this._selectedRouteCoords.length > 1) this._map.fitBounds(this._polyline.getBounds(), {padding: [30, 30]});
+                  const latLngsOnly = this._selectedRouteCoords.map(p => [p[0], p[1]]);
+                  this._polyline.setLatLngs(latLngsOnly);
+                  if (latLngsOnly.length > 1) this._map.fitBounds(this._polyline.getBounds(), {padding: [30, 30]});
               }
           };
       }
@@ -640,15 +695,12 @@ class VinFastDigitalTwin extends HTMLElement {
                               targetAngle = this.getBearing(this._selectedRouteCoords[currentIdx - 1][0], this._selectedRouteCoords[currentIdx - 1][1], pt[0], pt[1]);
                           }
                           const smoothedAngle = this._smoothRotation(targetAngle);
+                          
+                          const currentSpeed = pt[2] || 0; 
 
+                          this._marker.setIcon(this.getCarIcon(smoothedAngle, currentSpeed));
                           this._marker.setLatLng([pt[0], pt[1]]);
                           this._map.panTo([pt[0], pt[1]], { animate: true, duration: 0.25 });
-
-                          const iconEl = this._marker.getElement();
-                          if (iconEl) {
-                              const svg = iconEl.querySelector('.car-dir-svg');
-                              if (svg) svg.style.transform = `rotate(${smoothedAngle}deg)`;
-                          }
                       }
                       currentIdx++;
                   }, 250); 
@@ -663,11 +715,10 @@ class VinFastDigitalTwin extends HTMLElement {
     const lat = parseFloat(getValidState('vi_do_latitude') || 0);
     const lon = parseFloat(getValidState('kinh_do_longitude') || 0);
 
-    // FIX LỖI TÊN ĐỊNH DANH (ẨN SỐ 0/1/UNKNOWN)
-    let name = getValidState('ten_dinh_danh_xe') || getValidState('ten_xe') || 'Xe VinFast';
-    if (!name || name === "0" || name === "1" || name.toLowerCase() === "unknown") {
-        name = getValidState('ten_dinh_danh_xe') || 'Xe VinFast';
-    }
+    let name = getValidState('ten_dinh_danh_xe_mqtt');
+    if (!name || name === "0" || name === "1" || name.toLowerCase() === "unknown") name = getValidState('ten_dinh_danh_xe');
+    if (!name || name === "0" || name === "1" || name.toLowerCase() === "unknown") name = getValidState('model_xe_mqtt');
+    if (!name || name === "0" || name === "1" || name.toLowerCase() === "unknown") name = 'Xe VinFast';
 
     const statusObj = hass.states[`sensor.${p}_trang_thai_hoat_dong`];
     let statusTextRaw = statusObj ? statusObj.state : 'N/A';
@@ -677,14 +728,27 @@ class VinFastDigitalTwin extends HTMLElement {
         statusText += ` ${formatTimeSince(statusObj.last_changed)}`;
     }
     
+    // TỰ ĐỘNG CẬP NHẬT TEXT AI VÀ TỰ MỞ KHI CÓ TIN MỚI
     const aiAdvisor = getValidState('co_van_xe_dien_ai');
     const aiContainer = this.querySelector('#vf-ai-advisor-container');
     const aiTextEl = this.querySelector('#vf-ai-text');
+    const aiContentEl = this.querySelector('#vf-ai-content');
+    const aiChevron = this.querySelector('#vf-ai-chevron');
     
     if (aiContainer && aiTextEl) {
         if (aiAdvisor && !aiAdvisor.includes('Hệ thống AI đang chờ') && !aiAdvisor.includes('Vui lòng nhập Google')) {
             aiTextEl.innerText = aiAdvisor;
             aiContainer.style.display = 'block'; 
+            
+            // Nếu phát hiện nội dung AI thay đổi -> Tự động bung thẻ ra cho người dùng đọc
+            if (this._lastAiMessage !== aiAdvisor) {
+                this._lastAiMessage = aiAdvisor;
+                if (aiContentEl) {
+                    aiContentEl.style.maxHeight = '200px';
+                    aiContentEl.style.marginTop = '8px';
+                    if (aiChevron) aiChevron.style.transform = 'rotate(0deg)';
+                }
+            }
         } else {
             aiContainer.style.display = 'none'; 
         }
@@ -836,7 +900,6 @@ class VinFastDigitalTwin extends HTMLElement {
     renderStat('#vf-stat-range', range, 'km');
     renderStat('#vf-stat-trip', trip, 'km');
     
-    // FIX HIỂN THỊ TỔNG SỐ LẦN SẠC = SẠC TRẠM + SẠC NHÀ
     const pubSessions = parseInt(getValidState('so_lan_sac_tai_tram')) || 0;
     const homeSessions = parseInt(getValidState('so_lan_sac_tai_nha')) || 0;
     const totalSessions = parseInt(getValidState('tong_so_lan_sac')) || (pubSessions + homeSessions);
@@ -946,7 +1009,6 @@ class VinFastDigitalTwin extends HTMLElement {
         }
     }
 
-    // MAP AND GPS ROUTE UPDATE
     if (this._map && lat && lon && typeof L !== 'undefined') {
       if (!this._isReplaying) {
           let targetAngle = null;
@@ -999,18 +1061,22 @@ class VinFastDigitalTwin extends HTMLElement {
                       if (this._currentPolylineString !== routeJsonStr) {
                           this._currentPolylineString = routeJsonStr;
                           this._selectedRouteCoords = this.cleanRouteData(JSON.parse(routeJsonStr));
-                          this._polyline.setLatLngs(this._selectedRouteCoords);
+                          
+                          const latLngsOnly = this._selectedRouteCoords.map(p => [p[0], p[1]]);
+                          this._polyline.setLatLngs(latLngsOnly);
                       }
                   } catch(e) { console.warn("Lỗi đọc JSON bản đồ"); }
               }
           }
       }
 
+      // Đọc và render trạm sạc
       const stationsStr = getAttr('tram_sac_lan_can', 'stations');
-      if (stationsStr) {
+      if (stationsStr && stationsStr !== this._prevStationStr) {
           try {
+              this._prevStationStr = stationsStr;
               let newStations = typeof stationsStr === 'string' ? JSON.parse(stationsStr) : stationsStr;
-              if (Array.isArray(newStations) && this._currentStations.length !== newStations.length) {
+              if (Array.isArray(newStations)) {
                   this._currentStations = newStations;
                   this.renderStations();
               }
