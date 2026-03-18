@@ -489,6 +489,11 @@ class VinFastDigitalTwin extends HTMLElement {
                   <select id="trip-selector" style="width:100%; background:var(--card-background-color, rgba(255,255,255,0.95)); backdrop-filter:blur(4px); border:2px solid #2563eb; border-radius:8px; padding:8px; font-size:12px; font-weight:bold; color:var(--primary-text-color, #1e3a8a); cursor:pointer;"><option value="current">Đang tải...</option></select>
               </div>
               <div id="vf-map-canvas" style="width:100%; height:350px; background:var(--secondary-background-color, #e5e7eb); z-index:1;"></div>
+              
+              <style>
+                .leaflet-control-attribution { display: none !important; }
+              </style>
+              
               <div class="vf-address-bar" id="vf-address-container"><ha-icon icon="mdi:map-marker-radius"></ha-icon><span id="vf-current-address" style="color:var(--primary-text-color, #475569);">Đang tải dữ liệu...</span></div>
               <div class="map-controls">
                 <button class="map-btn" id="btn-locate"><ha-icon icon="mdi:crosshairs-gps"></ha-icon></button>
@@ -547,7 +552,6 @@ class VinFastDigitalTwin extends HTMLElement {
         .remote-btn { display: flex; align-items: center; justify-content: center; width: 45px; height: 45px; background: var(--card-background-color, white); border: 1px solid var(--divider-color, #e5e7eb); border-radius: 50%; color: var(--primary-text-color, #4b5563); cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: all 0.2s ease;}
         .remote-btn ha-icon { --mdc-icon-size: 22px; } .remote-btn:hover { background: rgba(37,99,235,0.1); color: #2563eb; transform: translateY(-2px);}
         
-        /* BẢN VÁ DARK MODE: Đồng bộ background stat-box cho tương thích với HA Theme */
         .vf-stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
         
         .stat-box { display: flex; align-items: center; gap: 8px; background: var(--secondary-background-color, rgba(243, 244, 246, 0.6)); padding: 10px; border-radius: 12px; border: 1px solid var(--divider-color, rgba(229, 231, 235, 0.8)); transition: all 0.2s; cursor: pointer; height: 60px; box-sizing: border-box; }
