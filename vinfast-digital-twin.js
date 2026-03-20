@@ -170,8 +170,18 @@ class VinFastDigitalTwin extends HTMLElement {
       const suggestCard = this.querySelector('#vf-smart-suggestion');
       if (!suggestCard || !this._currentStations || this._currentStations.length === 0) return;
       if (soc > 30 || heading === null) { suggestCard.style.display = 'none'; return; }
+      
+      // Lấy cấu hình xe để lọc trạm sạc cho VF3
+      const modelState = this._hass && this._entityPrefix ? this._hass.states[`sensor.${this._entityPrefix}_ten_dong_xe`] : null;
+      const carModel = modelState ? (modelState.state || "").toUpperCase() : "";
+
+      let validStations = this._currentStations;
+      if (carModel.includes("VF3") || carModel.includes("VF 3")) {
+          validStations = validStations.filter(st => st.power >= 20); // Loại bỏ sạc AC cho VF3
+      }
+
       let bestStation = null;
-      for (let st of this._currentStations) {
+      for (let st of validStations) {
           if (st.avail > 0 && st.dist < 20) {
               let stationBearing = this.getBearing(this._lastLat, this._lastLon, st.lat, st.lng);
               let diff = Math.abs(stationBearing - heading);
@@ -181,9 +191,18 @@ class VinFastDigitalTwin extends HTMLElement {
               }
           }
       }
+      
       if (bestStation) {
           this.querySelector('#vf-suggest-name').innerText = bestStation.name;
-          this.querySelector('#vf-suggest-dist').innerText = bestStation.dist;
+          
+          // Tính khoảng cách chính xác bằng thư viện bản đồ
+          let exactDist = bestStation.dist;
+          if (this._lastLat && this._lastLon && this._map) {
+              let distMeters = this._map.distance([this._lastLat, this._lastLon], [bestStation.lat, bestStation.lng]);
+              exactDist = (distMeters / 1000).toFixed(1);
+          }
+
+          this.querySelector('#vf-suggest-dist').innerText = exactDist;
           this.querySelector('#vf-suggest-power').innerText = bestStation.power;
           this.querySelector('#vf-suggest-avail').innerText = `${bestStation.avail}/${bestStation.total}`;
           const mapDomain = 'https://www.google.com/maps/dir/?api=1';
@@ -201,12 +220,22 @@ class VinFastDigitalTwin extends HTMLElement {
       this._stationLayer.clearLayers();
       if (!Array.isArray(this._currentStations)) return;
 
-      this._currentStations.forEach(st => {
+      // Lấy cấu hình xe để lọc trạm sạc cho VF3
+      const modelState = this._hass && this._entityPrefix ? this._hass.states[`sensor.${this._entityPrefix}_ten_dong_xe`] : null;
+      const carModel = modelState ? (modelState.state || "").toUpperCase() : "";
+
+      let validStations = this._currentStations;
+      if (carModel.includes("VF3") || carModel.includes("VF 3")) {
+          validStations = validStations.filter(st => st.power >= 20); // Loại bỏ sạc AC cho VF3
+      }
+
+      validStations.forEach(st => {
           const isDC = st.power >= 20;
           if (this._stationFilter === 'DC' && !isDC) return;
           if (this._stationFilter === 'AC' && isDC) return;
 
           if (st.lat && st.lng) {
+              // Tính khoảng cách động theo thời gian thực
               let exactDist = st.dist; 
               if (this._lastLat && this._lastLon) {
                   let distMeters = this._map.distance([this._lastLat, this._lastLon], [st.lat, st.lng]);
@@ -862,7 +891,11 @@ class VinFastDigitalTwin extends HTMLElement {
     const aiChevron = this.querySelector('#vf-ai-chevron');
     
     if (aiContainer && aiTextEl) {
-        if (aiAdvisor && !aiAdvisor.includes('Hệ thống AI đang chờ') && !aiAdvisor.includes('Vui lòng nhập Google')) {
+        // TỰ ĐỘNG ẨN HOÀN TOÀN THẺ AI NẾU KHÔNG DÙNG API KEY
+        if (!aiAdvisor || aiAdvisor === 'DISABLED' || aiAdvisor === 'unavailable') {
+            aiContainer.style.display = 'none'; 
+        } 
+        else if (!aiAdvisor.includes('Hệ thống AI đang chờ') && !aiAdvisor.includes('Vui lòng nhập Google') && !aiAdvisor.includes('waiting')) {
             aiTextEl.innerText = aiAdvisor;
             aiContainer.style.display = 'block'; 
             
@@ -875,6 +908,7 @@ class VinFastDigitalTwin extends HTMLElement {
                 }
             }
         } else {
+            // Trường hợp có Key nhưng đang chờ dữ liệu
             aiContainer.style.display = 'none'; 
         }
     }
@@ -884,8 +918,21 @@ class VinFastDigitalTwin extends HTMLElement {
     const speedNum = Math.round(Number(speed));
     
     const nameEl = this.querySelector('#vf-name');
+    const weatherCondition = getValidState('thoi_tiet_hien_tai');
+    const outsideTemp = getValidState('nhiet_do_ngoai_troi_gps');
+
+    if(nameEl) {
+        if (weatherCondition && outsideTemp && outsideTemp !== '--') {
+            nameEl.innerHTML = `<div style="display: flex; align-items: center; gap: 6px; font-size: 15px; font-weight: bold; color: var(--secondary-text-color, #64748b);">
+                <ha-icon icon="mdi:weather-partly-cloudy" style="--mdc-icon-size: 20px; color: #00bcd4;"></ha-icon>
+                <span>${outsideTemp}°C | ${weatherCondition}</span>
+            </div>`;
+        } else {
+            nameEl.innerText = name;
+        }
+    }
+
     const statBadgeEl = this.querySelector('#vf-status-badge');
-    if(nameEl) nameEl.innerText = name;
     if(statBadgeEl) statBadgeEl.innerText = statusText;
     
     const odoRaw = getValidState('tong_odo_mqtt') || getValidState('tong_odo');
@@ -975,7 +1022,7 @@ class VinFastDigitalTwin extends HTMLElement {
         if (chargeTimeEl) chargeTimeEl.innerText = (chargeTimeRemain && chargeTimeRemain !== 'unknown') ? `${chargeTimeRemain}` : '--';
         if (chargeStatusTextEl) chargeStatusTextEl.innerText = statusTextRaw.includes('đầy') ? "Đã sạc đầy" : "Hệ thống đang sạc";
         
-        let pwr = getValidState('cong_suat_sac_trung_binh_lan_cuoi') || getValidState('cong_suat_sac');
+        let pwr = getValidState('cong_suat_sac_tinh_toan_live') || getValidState('cong_suat_sac_trung_binh_lan_cuoi') || getValidState('cong_suat_sac');
         if (powerEl) powerEl.innerText = pwr ? `${pwr} kW` : 'Đang tính...';
     } else if (chargingBanner) {
         chargingBanner.style.display = 'none';
