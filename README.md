@@ -102,6 +102,7 @@ YAML
 //
 
 type: custom:vinfast-debug-card
+
 entity: sensor.dòng-xe_số-vin_system_debug_raw
 
 //
