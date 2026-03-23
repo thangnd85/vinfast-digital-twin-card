@@ -47,15 +47,15 @@ Cuộn xuống dưới cùng và chọn thẻ Thủ công (Manual).
 Copy và dán đoạn mã YAML dưới đây vào:
 
 YAML
-``
+//
 
 type: custom:vinfast-digital-twin
 
 entity_prefix: vf8_abcd12345678
 
-``
+//
 
-Prefix theo quy ước: dongxe_sovin
+Prefix theo quy ước: dòng-xe_số-vin
 
 🔍 Làm sao để tìm entity_prefix của bạn?
 entity_prefix là từ khóa đại diện cho xe của bạn (giúp Card biết cần lấy dữ liệu từ chiếc xe nào nếu nhà bạn có 2 xe trở lên).
@@ -80,14 +80,45 @@ Bỏ chữ sensor. ở đầu và bỏ phần chức năng _phan_tram_pin ở cu
 <b>Giao diện hiển thị Gọn gàng - Responsive 100% trên cả Điện thoại và Tablet.</b>
 </p>
 
+Bổ sung giao diện debug:
+
+<img width="692" height="823" alt="image" src="https://github.com/user-attachments/assets/94901698-cb17-499d-a0cf-42adf882ca51" />
+
+Gửi lên cho dev:
+
+<img width="721" height="640" alt="image" src="https://github.com/user-attachments/assets/559cd6ec-bedd-487e-af1d-fbf104b46247" />
+
+Cách tạo Card Debug: 
+
+Truy cập vào trang Dashboard của bạn, bấm vào biểu tượng Cây bút chì (Edit Dashboard) góc trên bên phải.
+
+Chọn Thêm Thẻ (Add Card).
+
+Cuộn xuống dưới cùng và chọn thẻ Thủ công (Manual).
+
+Copy và dán đoạn mã YAML dưới đây vào:
+
+YAML
+//
+
+type: custom:vinfast-debug-card
+entity: sensor.dòng-xe_số-vin_system_debug_raw
+
+//
+
+
 🛠️ Xử lý sự cố (Troubleshooting)
+
 Card báo lỗi "Custom element doesn't exist": 👉 HA chưa nhận được file JS. Hãy vào Cài đặt -> Dashboards -> Nút 3 chấm (Góc trên phải) -> Resources. Đảm bảo đường dẫn /hacsfiles/vinfast-digital-twin-card/vinfast-digital-twin.js đã được thêm vào và là loại JavaScript Module. Sau đó xóa Cache trình duyệt (Ctrl + F5).
 
 Card hiện chữ "Đang định vị..." hoặc "Đang thu thập...":
+
 👉 Xe đang trong trạng thái ngủ hoặc chờ tín hiệu từ MQTT. Hãy mang xe ra đường chạy một vòng hoặc cắm sạc để hệ thống phân tích động học có dữ liệu đầu vào.
 
 Hình xe bị trống:
+
 👉 Mở ứng dụng VinFast chính chủ trên điện thoại của bạn 1 lần để máy chủ VinFast cấp lại đường dẫn URL hình ảnh 3D cho xe.
 
 💖 Ủng hộ dự án
+
 Dự án này là hoàn toàn miễn phí và mã nguồn mở. Nếu bộ giao diện này giúp trải nghiệm xe điện của bạn tuyệt vời hơn, đừng ngần ngại nhấn ⭐ Star cho kho lưu trữ này và chia sẻ nó tới Cộng đồng những người sử dụng xe điện VinFast!
