@@ -139,8 +139,12 @@ class VinFastDigitalTwin extends HTMLElement {
 
             if (trip.route && trip.route.length > 0) {
                 groupedData[dateStr].push({
-                    time: ts, duration: trip.duration || 0, distance: trip.distance || 0,
-                    start_time_str: trip.start_time || "", end_time_str: trip.end_time || "",
+                    id: trip.id || ts,
+                    time: ts, 
+                    duration: trip.duration || 0, 
+                    distance: trip.distance || 0,
+                    start_time_str: trip.start_time || "", 
+                    end_time_str: trip.end_time || "",
                     route: trip.route
                 });
             }
@@ -154,41 +158,25 @@ class VinFastDigitalTwin extends HTMLElement {
             let dayTrips = groupedData[day];
             
             let drivingMins = 0; let totalDistance = 0; let pauseSecs = 0; let parkingSecs = 0; let maxSpeed = 0;
-            let startTime = dayTrips[0].start_time_str; let endTime = dayTrips[dayTrips.length - 1].end_time_str;
-            let mergedSegments = []; let currentSeg = null;
+            let startTime = dayTrips[0].start_time_str; 
+            let endTime = dayTrips[dayTrips.length - 1].end_time_str;
 
             dayTrips.forEach((trip, i) => {
-                drivingMins += trip.duration; totalDistance += trip.distance;
+                drivingMins += trip.duration; 
+                totalDistance += trip.distance;
                 trip.route.forEach(pt => { if (pt.length > 2 && pt[2] > maxSpeed) maxSpeed = pt[2]; });
-
-                if (!currentSeg) {
-                    currentSeg = { time: trip.time, endTime: trip.time + (trip.duration * 60), route: [...trip.route], pauseAfter: 0 };
-                } else {
-                    let timeGap = trip.time - currentSeg.endTime;
-                    let lastPt = currentSeg.route[currentSeg.route.length - 1]; let firstPt = trip.route[0];
-                    let distGap = this.getDistanceFromLatLonInM(lastPt[0], lastPt[1], firstPt[0], firstPt[1]);
-
-                    if (timeGap < 900 || distGap < 300) {
-                        currentSeg.route = currentSeg.route.concat(trip.route); currentSeg.endTime = trip.time + (trip.duration * 60);
-                    } else {
-                        currentSeg.pauseAfter = timeGap; 
-                        mergedSegments.push(currentSeg);
-                        currentSeg = { time: trip.time, endTime: trip.time + (trip.duration * 60), route: [...trip.route], pauseAfter: 0 };
-                    }
-                }
 
                 if (i < dayTrips.length - 1) {
                     let gapSecs = dayTrips[i+1].time - (trip.time + (trip.duration * 60));
                     if (gapSecs < 0) gapSecs = 0;
+                    trip.pauseAfter = gapSecs; 
                     if (gapSecs < 900) pauseSecs += gapSecs; else parkingSecs += gapSecs; 
+                } else {
+                    trip.pauseAfter = 0;
                 }
             });
 
-            if (currentSeg) {
-                currentSeg.pauseAfter = 0;
-                mergedSegments.push(currentSeg);
-            }
-            this._tripsData[day] = mergedSegments;
+            this._tripsData[day] = dayTrips;
             this._dayStats[day] = {
                 startTime, endTime, drivingMins, totalDistance: totalDistance.toFixed(1),
                 pauseMins: Math.round(pauseSecs / 60), parkingMins: Math.round(parkingSecs / 60), maxSpeed: Math.round(maxSpeed)
@@ -269,26 +257,23 @@ class VinFastDigitalTwin extends HTMLElement {
       }
       
       if (bestStation) {
-          const elName = this.querySelector('#vf-suggest-name');
-          const elDist = this.querySelector('#vf-suggest-dist');
-          const elPower = this.querySelector('#vf-suggest-power');
-          const elAvail = this.querySelector('#vf-suggest-avail');
-          
-          if(elName) elName.innerText = bestStation.name;
-          
+          this.querySelector('#vf-suggest-name').innerText = bestStation.name;
           let exactDist = bestStation.dist;
           if (this._lastLat && this._lastLon && this._map) {
               let distMeters = this._map.distance([this._lastLat, this._lastLon], [bestStation.lat, bestStation.lng]);
               exactDist = (distMeters / 1000).toFixed(1);
           }
-          if(elDist) elDist.innerText = exactDist;
-          if(elPower) elPower.innerText = bestStation.power;
-          if(elAvail) elAvail.innerText = `${bestStation.avail}/${bestStation.total}`;
+          this.querySelector('#vf-suggest-dist').innerText = exactDist;
+          this.querySelector('#vf-suggest-power').innerText = bestStation.power;
+          this.querySelector('#vf-suggest-avail').innerText = `${bestStation.avail}/${bestStation.total}`;
           
-          const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${this._lastLat},${this._lastLon}&destination=${bestStation.lat},${bestStation.lng}&travelmode=driving`;
+          let navUrl = `https://www.google.com/maps/dir/?api=1&destination=${bestStation.lat},${bestStation.lng}&travelmode=driving`;
+          if (this._lastLat && this._lastLon) {
+              navUrl += `&origin=${this._lastLat},${this._lastLon}`;
+          }
+          
           const btnNav = this.querySelector('#btn-suggest-nav');
           if (btnNav) btnNav.onclick = () => window.open(navUrl, '_blank');
-          
           suggestCard.style.display = 'block';
       } else { suggestCard.style.display = 'none'; }
   }
@@ -336,7 +321,11 @@ class VinFastDigitalTwin extends HTMLElement {
                   iconSize: [pinWidth, 26], iconAnchor: [pinWidth / 2, 13] 
               });
 
-              const navUrl = `https://www.google.com/maps/dir/?api=1${(this._lastLat && this._lastLon)?`&origin=${this._lastLat},${this._lastLon}`:''}&destination=${st.lat},${st.lng}&travelmode=driving`;
+              let navUrl = `https://www.google.com/maps/dir/?api=1&destination=${st.lat},${st.lng}&travelmode=driving`;
+              if (this._lastLat && this._lastLon) {
+                  navUrl += `&origin=${this._lastLat},${this._lastLon}`;
+              }
+              
               const popupContent = `
                   <div style="font-family:sans-serif; min-width: 170px;">
                       <b style="font-size: 13px; color: #1e3a8a;">${st.name}</b><br>
@@ -406,16 +395,22 @@ class VinFastDigitalTwin extends HTMLElement {
       const statsPanel = this.querySelector('#stats-panel');
       const liveTools = this.querySelector('#live-tools');
       const historyTools = this.querySelector('#history-tools');
+      const tripFilter = this.querySelector('#history-trip-filter');
       
       const liveIndicator = this.querySelector('#icon-live-indicator');
       const calIcon = this.querySelector('#icon-cal-mode');
 
       this._historyLayerGroup.clearLayers();
+      if (this._isReplaying) {
+          this._isReplaying = false;
+          cancelAnimationFrame(this._animationFrameId);
+      }
 
       if (this._selectedDateStr === 'LIVE') {
           if(statsPanel) statsPanel.style.display = 'none';
           if(liveTools) liveTools.style.display = 'contents';
           if(historyTools) historyTools.style.display = 'none';
+          if(tripFilter) tripFilter.style.display = 'none';
           
           if(liveIndicator) liveIndicator.style.display = 'block';
           if(calIcon) calIcon.style.color = '#334155';
@@ -438,6 +433,7 @@ class VinFastDigitalTwin extends HTMLElement {
           if(statsPanel) statsPanel.style.display = 'flex';
           if(liveTools) liveTools.style.display = 'none'; 
           if(historyTools) historyTools.style.display = 'contents'; 
+          if(tripFilter) tripFilter.style.display = 'flex';
           
           if(liveIndicator) liveIndicator.style.display = 'none';
           if(calIcon) calIcon.style.color = '#2563eb';
@@ -449,104 +445,158 @@ class VinFastDigitalTwin extends HTMLElement {
           const dailySegments = this._tripsData[this._selectedDateStr];
           if (!dailySegments || dailySegments.length === 0) {
               if(statsPanel) statsPanel.style.display = 'none';
+              if(historyTools) historyTools.style.display = 'none';
+              if(tripFilter) tripFilter.style.display = 'none';
               return;
           }
 
-          let chargeDuration = 0;
-          if (this._chargeHistoryData) {
-              const [y, m, d] = this._selectedDateStr.split('-');
-              const matchDate1 = `${d}/${m}/${y}`;
-              const matchDate2 = `${d}-${m}-${y}`;
-              this._chargeHistoryData.forEach(c => {
-                  if (c.date && (c.date === matchDate1 || c.date === matchDate2 || c.date.includes(matchDate1))) {
-                      chargeDuration += parseInt(c.duration || 0);
-                  }
+          // Cập nhật Dropdown Select Hành trình
+          const tripSelector = this.querySelector('#trip-selector');
+          if (tripSelector) {
+              tripSelector.innerHTML = '<option value="all">Tổng hợp ngày</option>';
+              dailySegments.forEach((t, i) => {
+                  let opt = document.createElement('option');
+                  opt.value = i;
+                  opt.innerText = `Chuyến ${i+1} (${t.start_time_str})`;
+                  tripSelector.appendChild(opt);
+              });
+              
+              const newTripSelector = tripSelector.cloneNode(true);
+              tripSelector.parentNode.replaceChild(newTripSelector, tripSelector);
+              
+              newTripSelector.addEventListener('change', (e) => {
+                  let val = e.target.value;
+                  this._renderHistoryMap(this._selectedDateStr, val === 'all' ? 'all' : parseInt(val));
               });
           }
 
-          const stats = this._dayStats[this._selectedDateStr];
-          if (stats) {
-              this.querySelector('#stat-time-a').innerText = stats.startTime || '--:--';
-              this.querySelector('#stat-time-b').innerText = stats.endTime || '--:--';
-              this.querySelector('#stat-dist').innerText = `${stats.totalDistance} km`; 
-              this.querySelector('#stat-drive').innerText = this.formatMins(stats.drivingMins);
-              this.querySelector('#stat-pause').innerText = this.formatMins(stats.pauseMins);
-              this.querySelector('#stat-park').innerText = this.formatMins(stats.parkingMins);
-              this.querySelector('#stat-speed').innerText = `${stats.maxSpeed} km/h`;
-              
-              const chargeMetric = this.querySelector('#metric-charge');
-              const statCharge = this.querySelector('#stat-charge');
-              if (chargeDuration > 0 && chargeMetric && statCharge) {
-                  chargeMetric.style.display = 'flex';
-                  statCharge.innerText = this.formatMins(chargeDuration);
-              } else if (chargeMetric) {
-                  chargeMetric.style.display = 'none';
-              }
-          }
-
-          const elAddrA = this.querySelector('#stat-addr-a');
-          const elAddrB = this.querySelector('#stat-addr-b');
-          elAddrA.innerText = "Đang dịch tọa độ...";
-          elAddrB.innerText = "Đang dịch tọa độ...";
-
-          const firstRoute = dailySegments[0];
-          const lastRoute = dailySegments[dailySegments.length - 1];
-          this.getAddressFromCoords(firstRoute.route[0][0], firstRoute.route[0][1]).then(addr => elAddrA.innerText = addr);
-          this.getAddressFromCoords(lastRoute.route[lastRoute.route.length-1][0], lastRoute.route[lastRoute.route.length-1][1]).then(addr => elAddrB.innerText = addr);
-
-          let bounds = L.latLngBounds();
-          let flatCoordsForReplay = [];
-
-          dailySegments.forEach((segmentObj, index) => {
-              const segment = segmentObj.route;
-              if (segment.length < 2) return;
-              flatCoordsForReplay.push(...segment); 
-
-              const latlngs = segment.map(pt => [pt[0], pt[1]]);
-              L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8, lineJoin: 'round' }).addTo(this._historyLayerGroup);
-              latlngs.forEach(ll => bounds.extend(ll));
-
-              if (index === 0) {
-                  L.marker(latlngs[0], { icon: L.divIcon({ className: 'marker-start' }) }).addTo(this._historyLayerGroup);
-              }
-              
-              if (index < dailySegments.length - 1) {
-                  let pauseMins = Math.round(segmentObj.pauseAfter / 60);
-                  let isParking = pauseMins >= 15;
-                  let iconClass = isParking ? 'marker-park' : 'marker-pause';
-                  let iconHtml = isParking ? 'P' : '';
-                  
-                  let marker = L.marker(latlngs[latlngs.length - 1], { icon: L.divIcon({ className: iconClass, html: iconHtml }) }).addTo(this._historyLayerGroup);
-                  let popupHtml = `
-                      <div style="font-family:sans-serif; text-align:center; min-width: 140px;">
-                          <div style="font-size:11px; font-weight:800; color:${isParking ? '#ef4444' : '#f59e0b'}; margin-bottom:6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">
-                              <ha-icon icon="${isParking ? 'mdi:parking' : 'mdi:timer-sand'}" style="--mdc-icon-size:14px; margin-bottom:-2px;"></ha-icon> 
-                              ${isParking ? 'ĐIỂM ĐỖ XE' : 'ĐIỂM DỪNG CHỜ'}
-                          </div>
-                          <div style="font-size:12px; color:#475569; font-weight:600;">
-                              Dừng tại đây:<br><span style="color:#0f172a; font-weight:900; font-size:14px;">${this.formatMins(pauseMins)}</span>
-                          </div>
-                      </div>
-                  `;
-                  marker.bindPopup(popupHtml);
-              }
-              
-              if (index === dailySegments.length - 1) {
-                  const lastPt = segment[segment.length - 1];
-                  const speed = lastPt.length > 2 ? lastPt[2] : 0;
-                  let endIcon = speed > 2.0 ? L.divIcon({ className: 'marker-continue', html: '❯' }) : L.divIcon({ className: 'marker-end-flag', html: '🏁' });
-                  L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(this._historyLayerGroup);
-              }
-          });
-
-          this._smoothedRouteCoords = flatCoordsForReplay;
-          
-          if (bounds.isValid()) {
-              this._map.fitBounds(bounds, { padding: [40, 40] }); 
-          } 
+          this._renderHistoryMap(this._selectedDateStr, 'all');
       }
       
       this.updateDynamicTripStats();
+  }
+
+  _renderHistoryMap(dateStr, tripIndex) {
+      this._historyLayerGroup.clearLayers();
+      if (this._isReplaying) {
+          this._isReplaying = false;
+          cancelAnimationFrame(this._animationFrameId);
+          const iconReplay = this.querySelector('#icon-replay');
+          if (iconReplay) iconReplay.setAttribute('icon', 'mdi:play-circle');
+      }
+
+      const dayTrips = this._tripsData[dateStr];
+      if (!dayTrips || dayTrips.length === 0) return;
+
+      let tripsToRender = tripIndex === 'all' ? dayTrips : [dayTrips[tripIndex]];
+      
+      let chargeDuration = 0;
+      if (tripIndex === 'all' && this._chargeHistoryData) {
+          const [y, m, d] = dateStr.split('-');
+          const matchDate1 = `${d}/${m}/${y}`;
+          const matchDate2 = `${d}-${m}-${y}`;
+          this._chargeHistoryData.forEach(c => {
+              if (c.date && (c.date === matchDate1 || c.date === matchDate2 || c.date.includes(matchDate1))) {
+                  chargeDuration += parseInt(c.duration || 0);
+              }
+          });
+      }
+
+      let totalDist = 0, totalDrive = 0, totalPause = 0, totalPark = 0, maxSpd = 0;
+      let startT = tripsToRender[0].start_time_str;
+      let endT = tripsToRender[tripsToRender.length - 1].end_time_str;
+      
+      if (tripIndex === 'all') {
+          const stats = this._dayStats[dateStr];
+          totalDist = stats.totalDistance;
+          totalDrive = stats.drivingMins;
+          totalPause = stats.pauseMins;
+          totalPark = stats.parkingMins;
+          maxSpd = stats.maxSpeed;
+      } else {
+          const t = tripsToRender[0];
+          totalDist = t.distance.toFixed(1);
+          totalDrive = t.duration;
+          totalPause = 0; totalPark = 0;
+          t.route.forEach(pt => { if (pt.length > 2 && pt[2] > maxSpd) maxSpd = pt[2]; });
+      }
+
+      this.querySelector('#stat-time-a').innerText = startT || '--:--';
+      this.querySelector('#stat-time-b').innerText = endT || '--:--';
+      this.querySelector('#stat-dist').innerText = `${totalDist} km`; 
+      this.querySelector('#stat-drive').innerText = this.formatMins(totalDrive);
+      this.querySelector('#stat-pause').innerText = this.formatMins(totalPause);
+      this.querySelector('#stat-park').innerText = this.formatMins(totalPark);
+      this.querySelector('#stat-speed').innerText = `${maxSpd} km/h`;
+      
+      const chargeMetric = this.querySelector('#metric-charge');
+      const statCharge = this.querySelector('#stat-charge');
+      if (chargeDuration > 0 && chargeMetric && statCharge) {
+          chargeMetric.style.display = 'flex';
+          statCharge.innerText = this.formatMins(chargeDuration);
+      } else if (chargeMetric) {
+          chargeMetric.style.display = 'none';
+      }
+
+      const elAddrA = this.querySelector('#stat-addr-a');
+      const elAddrB = this.querySelector('#stat-addr-b');
+      elAddrA.innerText = "Đang dịch tọa độ...";
+      elAddrB.innerText = "Đang dịch tọa độ...";
+
+      this.getAddressFromCoords(tripsToRender[0].route[0][0], tripsToRender[0].route[0][1]).then(addr => elAddrA.innerText = addr);
+      this.getAddressFromCoords(tripsToRender[tripsToRender.length-1].route[tripsToRender[tripsToRender.length-1].route.length-1][0], tripsToRender[tripsToRender.length-1].route[tripsToRender[tripsToRender.length-1].route.length-1][1]).then(addr => elAddrB.innerText = addr);
+
+      let bounds = L.latLngBounds();
+      let flatCoordsForReplay = [];
+      let stopCount = 1;
+
+      tripsToRender.forEach((segmentObj, index) => {
+          const segment = segmentObj.route;
+          if (segment.length < 2) return;
+          flatCoordsForReplay.push(...segment); 
+
+          const latlngs = segment.map(pt => [pt[0], pt[1]]);
+          L.polyline(latlngs, { color: '#2563eb', weight: 5, opacity: 0.8, lineJoin: 'round' }).addTo(this._historyLayerGroup);
+          latlngs.forEach(ll => bounds.extend(ll));
+
+          if (index === 0) {
+              L.marker(latlngs[0], { icon: L.divIcon({ className: 'marker-start' }) }).addTo(this._historyLayerGroup);
+          }
+          
+          if (index < tripsToRender.length - 1 && tripIndex === 'all') {
+              let pauseMins = Math.round(segmentObj.pauseAfter / 60);
+              let isParking = pauseMins >= 15;
+              let iconClass = isParking ? 'marker-park' : 'marker-pause';
+              let currentStopNum = stopCount++;
+              
+              let marker = L.marker(latlngs[latlngs.length - 1], { icon: L.divIcon({ className: iconClass, html: currentStopNum }) }).addTo(this._historyLayerGroup);
+              let popupHtml = `
+                  <div style="font-family:sans-serif; text-align:center; min-width: 140px;">
+                      <div style="font-size:11px; font-weight:800; color:${isParking ? '#ef4444' : '#f59e0b'}; margin-bottom:6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">
+                          <ha-icon icon="${isParking ? 'mdi:parking' : 'mdi:timer-sand'}" style="--mdc-icon-size:14px; margin-bottom:-2px;"></ha-icon> 
+                          ${isParking ? 'ĐIỂM ĐỖ XE' : 'ĐIỂM DỪNG'} #${currentStopNum}
+                      </div>
+                      <div style="font-size:12px; color:#475569; font-weight:600;">
+                          Thời gian:<br><span style="color:#0f172a; font-weight:900; font-size:14px;">${this.formatMins(pauseMins)}</span>
+                      </div>
+                      <div style="font-size:10px; color:#64748b; margin-top:4px;">(Trước chuyến đi số ${index+2})</div>
+                  </div>
+              `;
+              marker.bindPopup(popupHtml);
+          }
+          
+          if (index === tripsToRender.length - 1) {
+              const lastPt = segment[segment.length - 1];
+              const speed = lastPt.length > 2 ? lastPt[2] : 0;
+              let endIcon = speed > 2.0 ? L.divIcon({ className: 'marker-continue', html: '❯' }) : L.divIcon({ className: 'marker-end-flag', html: '🏁' });
+              L.marker(latlngs[latlngs.length - 1], { icon: endIcon }).addTo(this._historyLayerGroup);
+          }
+      });
+
+      this._smoothedRouteCoords = flatCoordsForReplay;
+      if (bounds.isValid()) {
+          this._map.fitBounds(bounds, { padding: [40, 40] }); 
+      } 
   }
 
   updateDynamicTripStats() {
@@ -718,9 +768,6 @@ class VinFastDigitalTwin extends HTMLElement {
     if (!this.content) {
       this.content = true;
       
-      // ==========================================
-      // LƯU Ý: CẤU TRÚC HTML SẠCH SẼ - KHÔNG BỊ TRÙNG LẶP ID
-      // ==========================================
       this.innerHTML = `
         <ha-card class="vf-card">
           <div class="vf-card-container">
@@ -880,9 +927,20 @@ class VinFastDigitalTwin extends HTMLElement {
             </div>
 
             <div class="map-and-cal-wrapper">
-              <div class="cal-toggle-btn glass-panel" id="btn-toggle-cal" title="Xem Lịch sử hành trình">
-                  <ha-icon id="icon-cal-mode" icon="mdi:calendar-month" style="color: #334155; --mdc-icon-size:20px;"></ha-icon>
-                  <ha-icon id="icon-live-indicator" icon="mdi:record-circle" style="color: #ef4444; position: absolute; top: -2px; right: -2px; animation: pulseRed 2s infinite; --mdc-icon-size:12px;"></ha-icon>
+              
+              <div style="position: absolute; top: 12px; left: 12px; z-index: 1000; display: flex; gap: 8px; width: calc(100% - 60px); pointer-events: none;">
+                  <div class="cal-toggle-btn glass-panel" id="btn-toggle-cal" title="Xem Lịch sử hành trình" style="pointer-events: auto;">
+                      <ha-icon id="icon-cal-mode" icon="mdi:calendar-month" style="color: #334155; --mdc-icon-size:20px;"></ha-icon>
+                      <ha-icon id="icon-live-indicator" icon="mdi:record-circle" style="color: #ef4444; position: absolute; top: -2px; right: -2px; animation: pulseRed 2s infinite; --mdc-icon-size:12px;"></ha-icon>
+                  </div>
+
+                  <div id="history-trip-filter" class="glass-panel" style="display: none; align-items: center; padding: 0 10px; flex: 1; max-width: 170px; height: 34px; box-sizing: border-box; pointer-events: auto;">
+                      <ha-icon icon="mdi:format-list-bulleted" style="--mdc-icon-size:16px; color:#2563eb; margin-right:4px;"></ha-icon>
+                      <select id="trip-selector" style="background:transparent; border:none; outline:none; font-weight:bold; font-size:12px; color:#0f172a; cursor:pointer; width:100%; text-overflow:ellipsis; appearance:none; -webkit-appearance:none; padding-right:15px; position:relative; z-index:2;">
+                          <option value="all">Tổng hợp ngày</option>
+                      </select>
+                      <ha-icon icon="mdi:chevron-down" style="--mdc-icon-size:18px; color:#64748b; margin-left:-20px; z-index:1;"></ha-icon>
+                  </div>
               </div>
 
               <div class="cal-dropdown" id="cal-dropdown">
@@ -1025,12 +1083,12 @@ class VinFastDigitalTwin extends HTMLElement {
         .map-and-cal-wrapper { position: relative; z-index: 2; margin-bottom: 12px; }
         .vf-map-container { position:relative; border-radius:16px; overflow:hidden; border:1px solid var(--divider-color, #e5e7eb); width: 100%; height: 45vh; min-height: 350px; z-index: 1;}
         
-        .glass-panel { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-radius: 10px; display: flex; }
+        .glass-panel { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-radius: 10px; display: flex; }
         
-        .cal-toggle-btn { position: absolute; top: 10px; left: 10px; z-index: 1000; padding: 6px; cursor: pointer; align-items: center; justify-content: center; transition: 0.2s;}
+        .cal-toggle-btn { width: 34px; height: 34px; padding: 0; cursor: pointer; align-items: center; justify-content: center; transition: 0.2s; position: relative;}
         .cal-toggle-btn:hover { background: rgba(255,255,255,1); transform: scale(1.05); }
         
-        .cal-dropdown { position: absolute; top: 50px; left: 10px; z-index: 1001; background: white; border-radius: 14px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: calc(100% - 20px); max-width: 320px; display: none; flex-direction: column; border: 1px solid #e2e8f0; box-sizing: border-box;}
+        .cal-dropdown { position: absolute; top: 50px; left: 12px; z-index: 1001; background: white; border-radius: 14px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: calc(100% - 24px); max-width: 320px; display: none; flex-direction: column; border: 1px solid #e2e8f0; box-sizing: border-box;}
         .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 700; color: #0f172a; font-size: 15px;}
         .cal-btn { background: transparent; border: none; cursor: pointer; font-size: 16px; padding: 6px; border-radius: 8px; display: flex; align-items: center; justify-content: center;}
         .cal-btn:hover { background: #f1f5f9; }
@@ -1068,14 +1126,13 @@ class VinFastDigitalTwin extends HTMLElement {
         .text-btn { font-size: 10px; font-weight: 800; color: #f59e0b; width: 100%; padding: 0; height: 20px; background: rgba(255,255,255,0.6); border-radius: 4px; margin-top: -2px;}
         .map-divider { height: 1px; background: rgba(0,0,0,0.1); margin: 2px 6px; }
 
-        /* TÙY CHỈNH POPUP LEAFLET */
         .leaflet-popup-content-wrapper { border-radius: 12px !important; padding: 0 !important; box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important; border: 1px solid #e2e8f0;}
         .leaflet-popup-content { margin: 12px !important; line-height: 1.4; }
         .leaflet-popup-tip { background: white !important; }
 
         .marker-start { background: #10b981; border: 2px solid white; border-radius: 50%; box-shadow: 0 3px 6px rgba(0,0,0,0.3); width: 14px !important; height: 14px !important; margin-top:-7px; margin-left:-7px;}
         .marker-park { background: #ef4444; border: 2px solid white; border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; width: 18px !important; height: 18px !important; margin-top:-9px; margin-left:-9px; box-shadow: 0 3px 6px rgba(0,0,0,0.3);}
-        .marker-pause { background: #f59e0b; border: 2px solid white; border-radius: 50%; width: 12px !important; height: 12px !important; margin-top:-6px; margin-left:-6px; box-shadow: 0 3px 6px rgba(0,0,0,0.3);}
+        .marker-pause { background: #f59e0b; border: 2px solid white; border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; width: 18px !important; height: 18px !important; margin-top:-9px; margin-left:-9px; box-shadow: 0 3px 6px rgba(0,0,0,0.3);}
         .marker-end-flag { font-size: 20px; line-height: 1; filter: drop-shadow(0 3px 3px rgba(0,0,0,0.3)); margin-top:-20px; margin-left:-10px;}
         .marker-continue { background: #3b82f6; border: 2px solid white; border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; width: 18px !important; height: 18px !important; margin-top:-9px; margin-left:-9px; box-shadow: 0 3px 6px rgba(0,0,0,0.3);}
       `;
@@ -1453,7 +1510,7 @@ class VinFastDigitalTwin extends HTMLElement {
     const sensorsToWatch = [
         { name: "Pin 12V", state: getValidState('pin_12v_ac_quy'), icon: "mdi:car-battery", unit: "%" }, { name: "Khóa tổng", state: getValidState('khoa_tong'), icon: "mdi:lock" },
         { name: "An ninh", state: getValidState('trang_thai_an_ninh'), icon: "mdi:shield-car" }, { name: "Phanh tay", state: phanhTay, icon: "mdi:car-brake-parking" },
-        { name: "Cảnh báo", state: getValidState('den_nhay_canh_bao'), icon: "mdi:car-light-alert" }, { name: "Điều hòa", state: getValidState('trang_thai_dieu_hoa'), icon: "mdi:air-conditioner" },
+        { name: "Cảnh báo", state: getValidState('den_nhay_canh_bao'), icon: "mdi:car-light-alert" }, { name: "Đèn pha", state: getValidState('trang_thai_den_pha'), icon: "mdi:car-light-high" }, { name: "Điều hòa", state: getValidState('trang_thai_dieu_hoa'), icon: "mdi:air-conditioner" },
         { name: "Cắm trại", state: getValidState('che_do_cam_trai_camp'), icon: "mdi:tent" }, { name: "Thú cưng", state: getValidState('che_do_thu_cung_pet'), icon: "mdi:paw" },
         { name: "Giao xe (Valet)", state: getValidState('che_do_giao_xe_valet'), icon: "mdi:account-tie-hat" }
     ];
@@ -1462,8 +1519,9 @@ class VinFastDigitalTwin extends HTMLElement {
     sensorsToWatch.forEach(s => {
         if (s.state && s.state !== '--' && s.state !== 'unknown') {
             let color = '#475569'; const stLower = s.state.toLowerCase();
-            if (stLower.includes('mở khóa') || stLower.includes('tắt an ninh') || stLower.includes('nhả phanh tay') || (stLower.includes('bật') && s.name==='Cảnh báo') || (s.name==='Pin 12V' && parseFloat(s.state) < 40)) { color = '#ef4444'; if (s.name !== 'Điều hòa') warningCount++; } 
-            else if (stLower.includes('khóa') || stLower.includes('bật an ninh') || stLower.includes('kéo phanh tay') || stLower.includes('đang bật')) { color = '#10b981'; }
+            if (stLower.includes('mở khóa') || stLower.includes('tắt an ninh') || stLower.includes('nhả phanh tay') || (stLower.includes('đang nháy') && s.name==='Cảnh báo') || (s.name==='Pin 12V' && parseFloat(s.state) < 40)) { color = '#ef4444'; if (s.name !== 'Điều hòa') warningCount++; } 
+            else if (stLower.includes('khóa') || stLower.includes('bật an ninh') || stLower.includes('kéo phanh tay') || (stLower.includes('đang bật') && s.name !== 'Đèn pha')) { color = '#10b981'; }
+            else if (stLower.includes('bật') && s.name === 'Đèn pha') { color = '#f59e0b'; }
             sensorHtml += `<div style="display:flex; justify-content:space-between; align-items:center; background:var(--primary-background-color, white); padding:8px 12px; border-radius:8px; border:1px solid var(--divider-color, #e2e8f0);"><div style="display:flex; align-items:center; gap:8px; color:var(--secondary-text-color, #475569);"><ha-icon icon="${s.icon}" style="color:${color}; --mdc-icon-size:18px;"></ha-icon><span style="font-size:12px; font-weight:600;">${s.name}</span></div><b style="font-size:12px; color:${color};">${s.state} ${s.unit||''}</b></div>`;
         }
     });
@@ -1511,7 +1569,8 @@ class VinFastDigitalTwin extends HTMLElement {
     const dtChargeSocEndEl = this.querySelector('#dt-charge-soc-end');
     if (dtChargeSocEndEl) { 
         let endSoc = getValidState('pin_luc_rut_sac_lan_cuoi'); 
-        if (isCharging) endSoc = batt; 
+        const c_status = String(getValidState('trang_thai_sac') || "0");
+        if (c_status == "1") endSoc = batt; 
         dtChargeSocEndEl.innerText = `${endSoc || '--'}%`; 
     }
     
@@ -1580,6 +1639,17 @@ class VinFastDigitalTwin extends HTMLElement {
         else addressEl.innerText = "Đang tìm vị trí...";
     }
 
+    if (batt && !isNaN(batt)) {
+        const battNum = parseFloat(batt); 
+        const stageEl = this.querySelector('#vf-car-stage');
+        if (battNum < 20) { if (stageEl) stageEl.classList.add('low-battery'); } else { if (stageEl) stageEl.classList.remove('low-battery'); }
+        if (this._smoothedRouteCoords && this._smoothedRouteCoords.length >= 2 && this._selectedDateStr === 'LIVE') {
+            const lastPt = this._smoothedRouteCoords[this._smoothedRouteCoords.length - 1]; const prevPt = this._smoothedRouteCoords[this._smoothedRouteCoords.length - 2];
+            const currentHeading = this.getBearing(prevPt[0], prevPt[1], lastPt[0], lastPt[1]);
+            this.checkAndShowSmartSuggestion(battNum, currentHeading);
+        } else this.checkAndShowSmartSuggestion(battNum, null);
+    }
+
     if (this._map && lat && lon && typeof L !== 'undefined') {
       if (!this._isReplaying && this._selectedDateStr === 'LIVE') {
           let targetAngle = this._currentAngle || 0;
@@ -1608,15 +1678,18 @@ class VinFastDigitalTwin extends HTMLElement {
           if (this._lastLat === null) this._map.setView([lat, lon], 15);
           this._lastLat = lat; this._lastLon = lon;
           
-          const routeJsonStr = getAttr('lo_trinh_gps', 'route_json');
-          if (routeJsonStr && this._polyline) {
-              if (this._currentPolylineString !== routeJsonStr) {
-                  this._currentPolylineString = routeJsonStr;
-                  let parsedData = this.safeParseJSON(routeJsonStr);
-                  this._rawRouteCoords = this.cleanRouteData(parsedData);
-                  this._smoothedRouteCoords = this._smoothRouteData(this._rawRouteCoords);
-                  const latLngsOnly = this._smoothedRouteCoords.map(p => [p[0], p[1]]);
-                  this._polyline.setLatLngs(latLngsOnly);
+          const selectEl = this.querySelector('#trip-selector');
+          if (selectEl && selectEl.value === "current") {
+              const routeJsonStr = getAttr('lo_trinh_gps', 'route_json');
+              if (routeJsonStr && this._polyline) {
+                  if (this._currentPolylineString !== routeJsonStr) {
+                      this._currentPolylineString = routeJsonStr;
+                      let parsedData = this.safeParseJSON(routeJsonStr);
+                      this._rawRouteCoords = this.cleanRouteData(parsedData);
+                      this._smoothedRouteCoords = this._smoothRouteData(this._rawRouteCoords);
+                      const latLngsOnly = this._smoothedRouteCoords.map(p => [p[0], p[1]]);
+                      this._polyline.setLatLngs(latLngsOnly);
+                  }
               }
           }
       }
