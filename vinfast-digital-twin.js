@@ -267,10 +267,11 @@ class VinFastDigitalTwin extends HTMLElement {
           this.querySelector('#vf-suggest-power').innerText = bestStation.power;
           this.querySelector('#vf-suggest-avail').innerText = `${bestStation.avail}/${bestStation.total}`;
           
-          let navUrl = `https://www.google.com/maps/dir/?api=1&destination=${bestStation.lat},${bestStation.lng}&travelmode=driving`;
+          let navUrl = `https://www.google.com/maps/dir/...?travelmode=driving`;
           if (this._lastLat && this._lastLon) {
               navUrl += `&origin=${this._lastLat},${this._lastLon}`;
           }
+          navUrl += `&destination=${bestStation.lat},${bestStation.lng}`;
           
           const btnNav = this.querySelector('#btn-suggest-nav');
           if (btnNav) btnNav.onclick = () => window.open(navUrl, '_blank');
@@ -321,10 +322,11 @@ class VinFastDigitalTwin extends HTMLElement {
                   iconSize: [pinWidth, 26], iconAnchor: [pinWidth / 2, 13] 
               });
 
-              let navUrl = `https://www.google.com/maps/dir/?api=1&destination=${st.lat},${st.lng}&travelmode=driving`;
+              let navUrl = `https://www.google.com/maps/dir/...?travelmode=driving`;
               if (this._lastLat && this._lastLon) {
                   navUrl += `&origin=${this._lastLat},${this._lastLon}`;
               }
+              navUrl += `&destination=${st.lat},${st.lng}`;
               
               const popupContent = `
                   <div style="font-family:sans-serif; min-width: 170px;">
@@ -450,7 +452,6 @@ class VinFastDigitalTwin extends HTMLElement {
               return;
           }
 
-          // Cập nhật Dropdown Select Hành trình
           const tripSelector = this.querySelector('#trip-selector');
           if (tripSelector) {
               tripSelector.innerHTML = '<option value="all">Tổng hợp ngày</option>';
@@ -759,10 +760,10 @@ class VinFastDigitalTwin extends HTMLElement {
     const formatTimeSince = (dateString) => {
         if (!dateString) return "";
         const s = Math.floor((new Date() - new Date(dateString)) / 1000);
-        if (s < 60) return "- vừa xong";
-        const m = Math.floor(s / 60); if (m < 60) return ` - ${m} phút trước`;
-        const h = Math.floor(m / 60); if (h < 24) return ` - ${h} giờ trước`;
-        return ` - ${Math.floor(h / 24)} ngày trước`;
+        if (s < 60) return "vừa xong";
+        const m = Math.floor(s / 60); if (m < 60) return `${m} phút trước`;
+        const h = Math.floor(m / 60); if (h < 24) return `${h} giờ trước`;
+        return `${Math.floor(h / 24)} ngày trước`;
     };
 
     if (!this.content) {
@@ -1183,7 +1184,7 @@ class VinFastDigitalTwin extends HTMLElement {
           aiHeader.onclick = () => {
               const isCollapsed = aiContent.style.maxHeight === '0px';
               if (isCollapsed) {
-                  aiContent.style.maxHeight = '200px'; aiContent.style.marginTop = '8px'; aiChevron.style.transform = 'rotate(0deg)';
+                  aiContent.style.maxHeight = '500px'; aiContent.style.marginTop = '8px'; aiChevron.style.transform = 'rotate(0deg)';
               } else {
                   aiContent.style.maxHeight = '0px'; aiContent.style.marginTop = '0px'; aiChevron.style.transform = 'rotate(180deg)';
               }
@@ -1463,6 +1464,32 @@ class VinFastDigitalTwin extends HTMLElement {
         doorsEl.innerHTML = securityHtml;
     }
 
+    // ===============================================
+    // PHỤC HỒI LOGIC CẬP NHẬT THẺ ĐANG SẠC
+    // ===============================================
+    const chargingBanner = this.querySelector('#vf-charging-banner');
+    const isCharging = statusTextRaw && (statusTextRaw.toLowerCase().includes('sạc') || statusTextRaw.toLowerCase().includes('hoàn tất'));
+    
+    if (isCharging && chargingBanner && !statusTextRaw.toLowerCase().includes('không')) {
+        chargingBanner.style.display = 'flex';
+        let chargeLimit = getValidState('muc_tieu_sac_target') || '--'; 
+        const chargeTimeRemain = getValidState('thoi_gian_sac_con_lai');
+        
+        const chargeLimitEl = this.querySelector('#vf-charge-limit'); 
+        const chargeTimeEl = this.querySelector('#vf-charge-time'); 
+        const chargeStatusTextEl = this.querySelector('#vf-charge-status-text'); 
+        const powerEl = this.querySelector('#vf-charge-power');
+        
+        if (chargeLimitEl) chargeLimitEl.innerText = chargeLimit !== '--' ? `${chargeLimit}%` : '--';
+        if (chargeTimeEl) chargeTimeEl.innerText = (chargeTimeRemain && chargeTimeRemain !== 'unknown') ? `${chargeTimeRemain}` : '--';
+        if (chargeStatusTextEl) chargeStatusTextEl.innerText = statusTextRaw.toLowerCase().includes('đầy') || statusTextRaw.toLowerCase().includes('hoàn tất') ? "Đã sạc đầy" : "Hệ thống đang sạc";
+        
+        let pwr = getValidState('cong_suat_sac_tinh_toan_live') || getValidState('cong_suat_sac_trung_binh_lan_cuoi') || getValidState('cong_suat_sac_tram') || getValidState('cong_suat_sac');
+        if (powerEl) powerEl.innerText = pwr ? `${pwr} kW` : 'Đang tính...';
+    } else if (chargingBanner) {
+        chargingBanner.style.display = 'none';
+    }
+
     const batt = getValidState('phan_tram_pin');
     let range = getValidState('quang_duong_du_kien');
     if (!range || range === '0' || range === '0.0' || range === '--' || range === 'unknown') {
@@ -1639,10 +1666,28 @@ class VinFastDigitalTwin extends HTMLElement {
         else addressEl.innerText = "Đang tìm vị trí...";
     }
 
+    // ===============================================
+    // PHỤC HỒI LOGIC ĐỔI VIỀN ĐỎ THẺ PIN (TỪ NGƯỜI DÙNG)
+    // ===============================================
     if (batt && !isNaN(batt)) {
         const battNum = parseFloat(batt); 
         const stageEl = this.querySelector('#vf-car-stage');
-        if (battNum < 20) { if (stageEl) stageEl.classList.add('low-battery'); } else { if (stageEl) stageEl.classList.remove('low-battery'); }
+        const boxBatt = this.querySelector('#box-batt-range');
+        
+        if (battNum < 20) { 
+            if (stageEl) stageEl.classList.add('low-battery'); 
+            if (boxBatt) {
+                boxBatt.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                boxBatt.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+            }
+        } else { 
+            if (stageEl) stageEl.classList.remove('low-battery'); 
+            if (boxBatt) {
+                boxBatt.style.removeProperty('background-color');
+                boxBatt.style.removeProperty('border-color');
+            }
+        }
+        
         if (this._smoothedRouteCoords && this._smoothedRouteCoords.length >= 2 && this._selectedDateStr === 'LIVE') {
             const lastPt = this._smoothedRouteCoords[this._smoothedRouteCoords.length - 1]; const prevPt = this._smoothedRouteCoords[this._smoothedRouteCoords.length - 2];
             const currentHeading = this.getBearing(prevPt[0], prevPt[1], lastPt[0], lastPt[1]);
@@ -1727,86 +1772,51 @@ class VinFastDebugCard extends HTMLElement {
       throw new Error('Bạn cần khai báo entity của cảm biến System Debug Raw Data');
     }
     this.config = config;
+    this.activeTab = 'log'; 
+    this.filterText = '';
+    this._logData = [];
     this._rawJsonData = {};
     
-    // Khôi phục dữ liệu người dùng đã sửa từ LocalStorage
     this._aliases = JSON.parse(localStorage.getItem('vf_debug_aliases') || '{}');
-    this._stateAliases = JSON.parse(localStorage.getItem('vf_debug_state_aliases') || '{}');
 
     // ==============================================================
-    // SIÊU TỪ ĐIỂN TỔNG HỢP TỪ TẤT CẢ CÁC DÒNG XE (VF3 -> VF9)
+    // SIÊU TỪ ĐIỂN TỔNG HỢP TỪ TẤT CẢ CÁC DÒNG XE
     // ==============================================================
     this._dictionary = {
-        "00006_00001_00000": { name: "Vĩ độ (Latitude)", parse: v => v },
-        "00006_00001_00001": { name: "Kinh độ (Longitude)", parse: v => v },
-        "00006_00001_00002": { name: "Độ cao (Altitude)", parse: v => `${v} m` },
-        "00005_00001_00030": { name: "Phiên bản Phần mềm (FRP)", parse: v => v },
-        "34196_00001_00004": { name: "Phiên bản T-Box", parse: v => v },
-        "34181_00001_00007": { name: "Biển số / Tên xe phụ", parse: v => v },
-        "34213_00001_00003": { name: "Khóa tổng", parse: v => v == 1 ? "Đã Khóa" : "Mở Khóa" },
-        "34234_00001_00003": { name: "Trạng thái An ninh", parse: v => (v == 1 || v == 2) ? "Đã Bật" : "Đã Tắt" },
-        "34186_00005_00004": { name: "Đèn nháy cảnh báo", parse: v => v == 1 ? "Đang bật" : "Tắt" },
-        "34205_00001_00001": { name: "Chế độ Giao xe (Valet)", parse: v => v == 1 ? "Bật" : "Tắt" },
-        "34206_00001_00001": { name: "Cắm trại(Khác) / Khóa(VF6)", parse: v => v == 1 ? "Bật / Khóa" : "Tắt / Mở" },
-        "34207_00001_00001": { name: "Chế độ Thú cưng (Pet)", parse: v => v == 1 ? "Bật" : "Tắt" },
-        "10351_00002_00050": { name: "Cửa tài xế", parse: v => v == 1 ? "Mở" : "Đóng" },
-        "10351_00001_00050": { name: "Cửa phụ", parse: v => v == 1 ? "Mở" : "Đóng" },
-        "10351_00006_00050": { name: "Cốp sau", parse: v => v == 1 ? "Mở" : "Đóng" },
-        "10351_00005_00050": { name: "Nắp Capo", parse: v => v == 1 ? "Mở" : "Đóng" },
-        "10351_00004_00050": { name: "Cửa sau tài xế", parse: v => v == 1 ? "Mở" : "Đóng" },
-        "10351_00003_00050": { name: "Cửa sau phụ", parse: v => v == 1 ? "Mở" : "Đóng" },
-        "34215_00002_00002": { name: "Kính tài xế", parse: v => v == 2 ? "Mở" : "Đóng" },
-        "34215_00001_00002": { name: "Kính phụ", parse: v => v == 2 ? "Mở" : "Đóng" },
-        "34215_00004_00002": { name: "Kính sau tài xế", parse: v => v == 2 ? "Mở" : "Đóng" },
-        "34215_00003_00002": { name: "Kính sau phụ", parse: v => v == 2 ? "Mở" : "Đóng" },
-        "34213_00003_00003": { name: "Trạng thái Mô-tơ Kính", parse: v => v },
-        "34213_00002_00003": { name: "Trạng thái Mô-tơ Cốp", parse: v => v },
-        "34213_00004_00003": { name: "Trạng thái nháy đèn pha", parse: v => v == 1 ? "Nháy pha" : "Tắt" },
-        "34184_00001_00004": { name: "Trạng thái điều hòa", parse: v => v == 1 ? "Bật" : "Tắt" },
-        "34184_00001_00011": { name: "Chế độ lấy gió", parse: v => v == 1 ? "Lấy gió trong" : "Lấy gió ngoài" },
-        "34184_00001_00012": { name: "Hướng gió điều hòa", parse: v => v == 1 ? "Mặt" : (v == 2 ? "Mặt & Chân" : (v == 3 ? "Chân" : (v == 4 ? "Kính & Chân" : "Auto"))) },
-        "34184_00001_00009": { name: "Sấy kính", parse: v => v == 1 ? "Bật" : "Tắt" },
-        "34184_00001_00025": { name: "Mức quạt gió", parse: v => `Mức ${v}` },
-        "34184_00001_00041": { name: "Mức độ làm lạnh", parse: v => `Mức ${v}` },
-        "34183_00001_00009": { name: "Phần trăm Pin (Plat A)", parse: v => `${v} %` },
-        "34180_00001_00011": { name: "Phần trăm Pin (Plat B)", parse: v => `${v} %` },
-        "34183_00001_00011": { name: "Quãng đường dự kiến (A)", parse: v => `${v} km` },
-        "34180_00001_00007": { name: "Quãng đường dự kiến (B)", parse: v => `${v} km` },
-        "34183_00001_00001": { name: "Vị trí cần số (A)", parse: v => v == 1 ? "P (Đỗ)" : (v == 2 ? "R (Lùi)" : (v == 3 ? "N (Mo)" : (v == 4 ? "D (Đi)" : v))) },
-        "34187_00000_00000": { name: "Vị trí cần số (B)", parse: v => v == 1 ? "P (Đỗ)" : (v == 2 ? "R (Lùi)" : (v == 3 ? "N (Mo)" : (v == 4 ? "D (Đi)" : v))) },
-        "34183_00001_00002": { name: "Tốc độ hiện tại (A)", parse: v => `${v} km/h` },
-        "34188_00000_00000": { name: "Tốc độ hiện tại (B)", parse: v => `${v} km/h` },
-        "34183_00001_00003": { name: "Tổng ODO (A)", parse: v => `${v} km` },
-        "34199_00000_00000": { name: "Tổng ODO (B)", parse: v => `${v} km` },
-        "34183_00001_00010": { name: "Trạng thái Lái (Ready A)", parse: v => v == 3 ? "Sẵn sàng chạy" : "Chưa sẵn sàng" },
-        "34180_00001_00010": { name: "Trạng thái Lái (Ready B)", parse: v => v == 3 ? "Sẵn sàng chạy" : "Chưa sẵn sàng" },
-        "34183_00001_00029": { name: "Phanh tay điện tử", parse: v => v == 1 ? "Kéo phanh" : "Nhả phanh" },
-        "34183_00001_00035": { name: "Công tắc Phanh chân", parse: v => v },
-        "34183_00001_00005": { name: "Pin 12V (A)", parse: v => `${v} %` },
-        "34181_00000_00000": { name: "Pin 12V (B)", parse: v => `${v} %` },
-        "34220_00001_00001": { name: "Sức khỏe pin (SOH)", parse: v => `${v} %` },
-        "34193_00001_00031": { name: "Cắm súng sạc (A)", parse: v => v == 1 ? "Đã cắm" : "Chưa cắm" },
-        "34183_00000_00004": { name: "Cắm súng sạc (B)", parse: v => v == 1 ? "Đã cắm" : "Chưa cắm" },
-        "34193_00001_00005": { name: "Trạng thái sạc (A)", parse: v => v == 1 ? "Đang sạc" : (v == 2 ? "Đầy" : "Không sạc") },
-        "34183_00000_00001": { name: "Trạng thái sạc (B)", parse: v => v == 1 ? "Đang sạc" : (v == 2 ? "Đầy" : "Không sạc") },
-        "34193_00001_00007": { name: "Tgian sạc còn lại (A)", parse: v => `${v}p` },
-        "34183_00000_00009": { name: "Tgian sạc còn lại (B)", parse: v => `${v}p` },
-        "34193_00001_00026": { name: "Tgian sạc ước tính", parse: v => `${v}p` },
-        "34193_00001_00013": { name: "Giờ hoàn tất sạc", parse: v => v },
-        "34193_00001_00032": { name: "Relay hệ thống sạc", parse: v => v },
-        "34193_00001_00016": { name: "Mã phiên sạc", parse: v => v },
-        "34183_00000_00012": { name: "Công suất sạc (B)", parse: v => `${v} kW` },
-        "34183_00001_00007": { name: "Nhiệt độ ngoài trời (A)", parse: v => `${v} °C` },
-        "34189_00000_00000": { name: "Nhiệt độ ngoài trời (B)", parse: v => `${v} °C` },
-        "34183_00001_00015": { name: "Nhiệt độ trong xe (A)", parse: v => `${v} °C` },
-        "34190_00000_00000": { name: "Nhiệt độ trong xe (B)", parse: v => `${v} °C` },
-        "34224_00001_00005": { name: "Nhiệt độ ĐH cài đặt", parse: v => `${v} °C` },
-        "56789_00001_00005": { name: "Đèn Pha", parse: v => v == 1 ? "Bật" : "Tắt" },
+        "34183_00001_00009": { name: "Mức Pin (SOC %)", parse: v => `${v}%` },
+        "34180_00001_00011": { name: "Mức Pin BMS (SOC %)", parse: v => `${v}%` },
+        "34199_00000_00000": { name: "ODO (km)", parse: v => `${v} km` },
+        "34183_00001_00003": { name: "ODO (km)", parse: v => `${v} km` },
+        "34180_00001_00021": { name: "Điện áp 12V", parse: v => `${v} V` },
+        "34180_00001_00014": { name: "Nhiệt độ Pin HV", parse: v => `${v} °C` },
+        "34220_00001_00001": { name: "Độ chai Pin (SOH %)", parse: v => `${v}%` },
+        "34193_00001_00009": { name: "Quãng đường dự kiến", parse: v => `${v} km` },
+        "34193_00001_00005": { name: "Trạng thái Sạc", parse: v => v == 1 ? "Đang sạc" : (v == 2 ? "Ngắt sạc" : "Lỗi/Rút súng") },
+
+        "34183_00000_00001": { name: "Cửa Tổng", parse: v => v == 1 ? "Mở" : "Đóng" },
+        "34206_00001_00001": { name: "Khóa cửa (Lock)", parse: v => v == 1 ? "Đã khóa" : "Chưa khóa" },
+        "34234_00001_00003": { name: "Cốp sau (Trunk)", parse: v => v == 1 ? "Mở" : "Đóng" },
+        "34234_00001_00002": { name: "Nắp Capo (Frunk)", parse: v => v == 1 ? "Mở" : "Đóng" },
+        
+        "34213_00002_00003": { name: "Kính Lái (Trước Trái)", parse: v => v == 1 ? "Mở" : "Đóng" },
+        "34213_00002_00004": { name: "Kính Phụ (Trước Phải)", parse: v => v == 1 ? "Mở" : "Đóng" },
+        "34213_00002_00005": { name: "Kính Sau Trái", parse: v => v == 1 ? "Mở" : "Đóng" },
+        "34213_00002_00006": { name: "Kính Sau Phải", parse: v => v == 1 ? "Mở" : "Đóng" },
+
         "34196_00001_00003": { name: "Áp suất Lốp Trước Trái", parse: v => `${(v/10).toFixed(1)} Bar` },
         "34196_00001_00005": { name: "Áp suất Lốp Trước Phải", parse: v => `${(v/10).toFixed(1)} Bar` },
         "34196_00001_00007": { name: "Áp suất Lốp Sau Trái", parse: v => `${(v/10).toFixed(1)} Bar` },
         "34196_00001_00009": { name: "Áp suất Lốp Sau Phải", parse: v => `${(v/10).toFixed(1)} Bar` },
-        "56789_00001_00007": { name: "Trạng thái mạng", parse: v => v }
+
+        "10351_00006_00050": { name: "Điều hòa (AC)", parse: v => v == 1 ? "Bật" : "Tắt" },
+        "10351_00006_00052": { name: "Nhiệt độ Điều hòa", parse: v => `${v} °C` },
+        "10351_00006_00015": { name: "Nhiệt độ Môi trường", parse: v => `${v} °C` },
+        
+        "56789_00001_00005": { name: "Đèn Pha", parse: v => v == 1 ? "Bật" : "Tắt" },
+        "34185_00001_00001": { name: "GPS Lat", parse: v => v },
+        "34185_00001_00002": { name: "GPS Lon", parse: v => v },
+        "34185_00001_00003": { name: "Tốc độ (Speed)", parse: v => `${v} km/h` },
+        "34185_00001_00004": { name: "Hướng di chuyển", parse: v => `${v}°` }
     };
   }
 
@@ -1825,20 +1835,34 @@ class VinFastDebugCard extends HTMLElement {
       this.content = true;
     }
 
-    // Lấy toàn bộ thuộc tính của sensor "System Debug Raw"
     if (stateObj.attributes) {
         let tempRaw = {};
         for (let key in stateObj.attributes) {
-            // Lọc bỏ các thuộc tính hệ thống của HA
-            if (key !== "friendly_name" && key !== "icon" && key !== "Chi tiết" && key !== "Trạng thái") {
+            if (key !== "friendly_name" && key !== "icon" && key !== "Chi tiết") {
                 tempRaw[key] = stateObj.attributes[key];
             }
         }
+        this._rawJsonData = tempRaw;
+
+        let newLogData = [];
+        let nowStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
         
-        // Nếu số lượng mã nhận được nhiều hơn số đang hiển thị, hoặc có sự thay đổi giá trị
-        if (Object.keys(tempRaw).length !== Object.keys(this._rawJsonData).length || JSON.stringify(tempRaw) !== JSON.stringify(this._rawJsonData)) {
-            this._rawJsonData = tempRaw;
-            this.updateTable();
+        for (let [code, val] of Object.entries(this._rawJsonData)) {
+            let isExists = this._logData.find(item => item.code === code);
+            if (!isExists || isExists.new_value !== val) {
+                newLogData.push({
+                    time: nowStr,
+                    code: code,
+                    old_value: isExists ? isExists.new_value : "NEW",
+                    new_value: val,
+                    status: (this._aliases[code] || this._dictionary[code]) ? "KNOWN" : "UNKNOWN"
+                });
+            }
+        }
+        
+        if (newLogData.length > 0) {
+            this._logData = [...newLogData, ...this._logData].slice(0, 100);
+            this.renderBody();
         }
     }
   }
@@ -1847,31 +1871,26 @@ class VinFastDebugCard extends HTMLElement {
     this.innerHTML = `
       <ha-card class="debug-card">
         <div class="debug-header">
-          <div style="display:flex; align-items:center;">
+          <div>
             <ha-icon icon="mdi:console-network" style="color:#10b981; margin-right:8px;"></ha-icon>
             VINFAST REVERSE ENGINEER
           </div>
           <div id="debug-status-text" class="debug-status">Đang tải dữ liệu...</div>
         </div>
+        
+        <div class="debug-toolbar">
+          <input type="text" id="debug-search" class="debug-search" placeholder="🔍 Nhập mã (VD: 34213) hoặc tên để lọc...">
+          <div class="debug-tabs">
+            <button id="btn-tab-log" class="debug-tab active" data-target="log">Sự kiện Live</button>
+            <button id="btn-tab-raw" class="debug-tab" data-target="raw">Raw JSON</button>
+            <button id="btn-tab-report" class="debug-tab" data-target="report" style="color: #f59e0b;"><ha-icon icon="mdi:github" style="width:14px;height:14px;"></ha-icon> Báo cáo</button>
+          </div>
+        </div>
 
         <div class="debug-body">
-          <table class="report-table">
-            <thead>
-                <tr>
-                    <th style="width: 28%">Mã Lệnh</th>
-                    <th style="width: 22%">RAW</th>
-                    <th style="width: 25%">Tên Đề xuất</th>
-                    <th style="width: 25%">Trạng thái</th>
-                </tr>
-            </thead>
-            <tbody id="debug-table-body">
-                </tbody>
-          </table>
-          
-          <button id="btn-submit-github">
-              <ha-icon icon="mdi:github" style="margin-right: 6px;"></ha-icon>
-              GỬI ĐÓNG GÓP (MỞ GITHUB)
-          </button>
+          <div id="view-log" class="debug-view"></div>
+          <pre id="view-raw" class="debug-view" style="display: none;"></pre>
+          <div id="view-report" class="debug-view" style="display: none;"></div>
         </div>
       </ha-card>
     `;
@@ -1882,152 +1901,269 @@ class VinFastDebugCard extends HTMLElement {
       .debug-header { background: #1e293b; padding: 12px 16px; font-size: 14px; font-weight: bold; border-bottom: 1px solid #334155; display:flex; align-items:center; justify-content: space-between; letter-spacing: 1px; color:#10b981;}
       .debug-status { font-size: 11px; font-weight: normal; color: #94a3b8; text-transform: none; letter-spacing: 0;}
       
-      .debug-body { padding: 0; max-height: 600px; overflow-y: auto; position: relative;}
+      .debug-toolbar { padding: 12px; background: #0f172a; border-bottom: 1px solid #1e293b; }
+      .debug-search { width: 100%; padding: 10px; background: #1e293b; border: 1px solid #334155; border-radius: 6px; color: #38bdf8; font-family: monospace; font-size: 13px; outline: none; margin-bottom: 10px; transition: border 0.2s; box-sizing: border-box;}
+      .debug-search:focus { border-color: #38bdf8; }
+      
+      .debug-tabs { display: flex; gap: 8px; }
+      .debug-tab { background: #1e293b; border: 1px solid #334155; color: #94a3b8; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-family: monospace; font-size: 12px; font-weight: bold; flex: 1; transition: all 0.2s; display: flex; justify-content: center; align-items: center; gap: 4px;}
+      .debug-tab:hover { background: #334155; color: white;}
+      .debug-tab.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8;}
+      .debug-tab.active[data-target="report"] { background: #f59e0b; border-color: #f59e0b; color: #0f172a;}
+      
+      .debug-body { padding: 12px; height: 500px; overflow-y: auto; }
       .debug-body::-webkit-scrollbar { width: 8px; }
       .debug-body::-webkit-scrollbar-track { background: #0f172a; }
       .debug-body::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
       
-      .report-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
-      .report-table th { background: #1e293b; padding: 10px 8px; text-align: left; position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #334155; color: #94a3b8;}
-      .report-table td { padding: 8px 8px; border-bottom: 1px solid #1e293b; vertical-align: middle; word-wrap: break-word;}
+      /* Log Tab */
+      .log-item { padding: 12px 10px; border-bottom: 1px dashed #1e293b; font-size: 13px; line-height: 1.5; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;}
+      .log-left { display: flex; flex-direction: column; flex: 1;}
+      .log-time { color: #64748b; font-size: 11px; margin-bottom: 4px;}
+      .log-code { color: #f43f5e; font-weight: bold; letter-spacing: 0.5px;}
+      .log-name-input { background: transparent; border: 1px dashed #334155; color: #e2e8f0; font-family: monospace; font-size: 13px; padding: 4px; border-radius: 4px; width: 90%; outline: none;}
+      .log-name-input:focus { border-color: #10b981; border-style: solid; background: rgba(16, 185, 129, 0.1); }
       
-      .report-row:hover { background: rgba(255,255,255,0.03); }
+      .log-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px;}
+      .log-val-box { background: #1e293b; padding: 4px 10px; border-radius: 20px; border: 1px solid #334155; display: flex; align-items: center;}
+      .log-val-old { color: #94a3b8; text-decoration: line-through; margin: 0 4px;}
+      .log-arrow { color: #10b981; margin: 0 4px;}
+      .log-val-new { color: #10b981; font-weight: bold; font-size: 14px;}
       
-      .rep-input { width: 90%; background: #0f172a; color: #38bdf8; border: 1px solid #334155; padding: 6px 8px; border-radius: 6px; font-family: monospace; outline: none; transition: border 0.2s; box-sizing: border-box;}
-      .rep-input:focus { border-color: #10b981; background: rgba(16, 185, 129, 0.05); color: #fff;}
+      #view-raw { margin: 0; font-size: 13px; color: #38bdf8; white-space: pre-wrap; word-break: break-all;}
+
+      /* Report Tab */
+      .report-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+      .report-table th { background: #1e293b; padding: 8px; text-align: left; position: sticky; top: 0; z-index: 2; border-bottom: 2px solid #334155; color: #94a3b8;}
+      .report-table td { padding: 6px 8px; border-bottom: 1px solid #1e293b; vertical-align: middle; word-wrap: break-word;}
+      .report-row.unknown { background: rgba(245, 158, 11, 0.05); }
+      .report-row:hover { background: rgba(255,255,255,0.05); }
+      .rep-input { width: 90%; background: #0f172a; color: #38bdf8; border: 1px solid #334155; padding: 6px; border-radius: 4px; font-family: monospace; outline: none; transition: border 0.2s;}
+      .rep-input:focus { border-color: #f59e0b; background: rgba(245, 158, 11, 0.1); color: #fff;}
       
-      #btn-submit-github { width: calc(100% - 24px); padding: 12px; margin: 12px; background: #24292e; color: white; border: 1px solid #444; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;}
+      .guide-box { background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; padding: 12px; border-radius: 8px; margin-bottom: 15px; color: #e2e8f0; font-size: 13px; line-height: 1.6; }
+      .guide-step { font-weight: bold; color: #10b981;}
+      
+      #btn-submit-github { width: 100%; padding: 12px; margin-top: 15px; background: #24292e; color: white; border: 1px solid #444; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;}
       #btn-submit-github:hover { background: #2ea043; border-color: #2ea043;}
     `;
     this.appendChild(style);
 
-    // Xử lý LƯU DATA trực tiếp khi người dùng gõ
-    this.querySelector('#debug-table-body').addEventListener('input', (e) => {
-        const tr = e.target.closest('tr');
-        if (!tr) return;
-        const code = tr.getAttribute('data-key');
-        const rawVal = tr.getAttribute('data-raw');
+    const tabs = this.querySelectorAll('.debug-tab');
+    const views = this.querySelectorAll('.debug-view');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            tabs.forEach(t => t.classList.remove('active'));
+            const target = e.currentTarget.getAttribute('data-target');
+            e.currentTarget.classList.add('active');
+            this.activeTab = target;
+            
+            views.forEach(v => v.style.display = 'none');
+            this.querySelector(`#view-${target}`).style.display = 'block';
+            this.renderBody();
+        });
+    });
 
-        if (e.target.classList.contains('rep-name')) {
+    this.querySelector('#debug-search').addEventListener('input', (e) => {
+      this.filterText = e.target.value.toLowerCase();
+      this.renderBody();
+    });
+
+    this.querySelector('.debug-body').addEventListener('input', (e) => {
+        if (e.target.classList.contains('log-name-input')) {
+            const code = e.target.getAttribute('data-code');
             const newName = e.target.value;
             if (newName.trim() === '') delete this._aliases[code];
             else this._aliases[code] = newName;
             localStorage.setItem('vf_debug_aliases', JSON.stringify(this._aliases));
         }
-
-        if (e.target.classList.contains('rep-state')) {
-            const newState = e.target.value;
-            if (!this._stateAliases[code]) this._stateAliases[code] = {};
-            
-            if (newState.trim() === '') delete this._stateAliases[code][rawVal];
-            else this._stateAliases[code][rawVal] = newState;
-            localStorage.setItem('vf_debug_state_aliases', JSON.stringify(this._stateAliases));
-        }
     });
 
-    // Xử lý gửi báo cáo Github
-    this.querySelector('#btn-submit-github').addEventListener('click', (e) => {
-        let markdown = `### Báo cáo Giải mã Lệnh / Cảm biến mới\n\n`;
-        markdown += `Tôi phát hiện một số mã lệnh mới từ thẻ Debug Card:\n\n`;
-        markdown += `| Device Key | Giá trị RAW | Đề xuất Tên (Name) | Đề xuất Trạng thái |\n`;
-        markdown += `| :--- | :--- | :--- | :--- |\n`;
-        
-        let issueCount = 0;
-        const rows = this.querySelectorAll('.report-row');
-        rows.forEach(row => {
-            let k = row.getAttribute('data-key');
-            let rv = row.getAttribute('data-raw');
-            let name = row.querySelector('.rep-name').value.trim();
-            let state = row.querySelector('.rep-state').value.trim();
+    this.querySelector('.debug-body').addEventListener('click', (e) => {
+        const btnSubmit = e.target.closest('#btn-submit-github');
+        if (btnSubmit) {
+            let markdown = `### Báo cáo Giải mã Lệnh / Cảm biến mới\n\n`;
+            markdown += `Tôi phát hiện một số mã lệnh mới từ thẻ Debug Card:\n\n`;
+            markdown += `| Device Key | Giá trị RAW | Đề xuất Tên (Name) | Đề xuất Trạng thái |\n`;
+            markdown += `| :--- | :--- | :--- | :--- |\n`;
             
-            // Lọc những ô mà người dùng có nhập liệu (Khác rỗng và khác placeholder)
-            if ((name !== "" && !name.includes("Vd:")) || (state !== "" && !state.includes("Vd:"))) {
-                markdown += `| \`${k}\` | \`${rv}\` | **${name || "_Chưa rõ_"}** | ${state || "_Chưa rõ_"} |\n`;
-                issueCount++;
+            let issueCount = 0;
+            const rows = this.querySelectorAll('.report-row');
+            rows.forEach(row => {
+                let k = row.getAttribute('data-key');
+                let rv = row.getAttribute('data-raw');
+                let name = row.querySelector('.rep-name').value.trim();
+                let state = row.querySelector('.rep-state').value.trim();
+                
+                if (name !== "" || state !== "") {
+                    markdown += `| \`${k}\` | \`${rv}\` | **${name || "_Chưa rõ_"}** | ${state || "_Chưa rõ_"} |\n`;
+                    issueCount++;
+                }
+            });
+
+            if (issueCount === 0) {
+                alert("Hãy nhập Đề xuất Tên hoặc Trạng thái vào ít nhất 1 ô trống trước khi gửi báo cáo!");
+                return;
             }
-        });
 
-        if (issueCount === 0) {
-            alert("Hãy sửa tên hoặc trạng thái của ít nhất 1 dòng trước khi gửi đóng góp nhé!");
-            return;
-        }
+            markdown += `\n<details>\n<summary><b>JSON RAW Đính kèm (Dành cho Dev)</b></summary>\n\n`;
+            markdown += `\`\`\`json\n${JSON.stringify(this._rawJsonData, null, 2)}\n\`\`\`\n`;
+            markdown += `\n</details>\n`;
 
-        markdown += `\n<details>\n<summary><b>JSON RAW Đính kèm (Dành cho Dev)</b></summary>\n\n`;
-        markdown += `\`\`\`json\n${JSON.stringify(this._rawJsonData, null, 2)}\n\`\`\`\n`;
-        markdown += `\n</details>\n`;
-
-        const btnSubmit = e.currentTarget;
-        navigator.clipboard.writeText(markdown).then(() => {
-            btnSubmit.style.background = "#2ea043";
-            btnSubmit.innerHTML = `<ha-icon icon="mdi:check-circle"></ha-icon> ĐÃ COPY! ĐANG MỞ GITHUB...`;
-            
+            // ==============================================================
+            // BƯỚC 1: MỞ TAB GITHUB NGAY LẬP TỨC ĐỂ TRÁNH BỊ CHẶN POPUP
+            // ==============================================================
             let issueTitle = "Bổ sung mã lệnh cảm biến mới (từ Cộng đồng)";
             let githubBaseUrl = "https://github.com/thangnd85/vinfast-connected-car/issues/new";
-            let finalUrl = `${githubBaseUrl}?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent("Dán (Ctrl+V) nội dung đã được copy tự động vào đây...")}`;
-            window.open(finalUrl, "_blank");
+            let encodedBody = encodeURIComponent(markdown);
+            let finalUrl = githubBaseUrl;
+            
+            // Github giới hạn URL khoảng 4000-8000 ký tự. Nếu ngắn, ta nhét luôn Data vào URL
+            if (encodedBody.length < 4000) {
+                finalUrl = `${githubBaseUrl}?title=${encodeURIComponent(issueTitle)}&body=${encodedBody}`;
+            }
 
-            setTimeout(() => {
-                btnSubmit.style.background = "#24292e";
-                btnSubmit.innerHTML = `<ha-icon icon="mdi:github" style="margin-right: 6px;"></ha-icon> GỬI ĐÓNG GÓP (MỞ GITHUB)`;
-            }, 3000);
-        }).catch(err => {
-            alert("Lỗi khi copy vào bộ nhớ tạm: " + err);
-        });
+            // Gọi hàm window.open ĐỒNG BỘ với thao tác Click của người dùng
+            let newTab = window.open(finalUrl, "_blank");
+
+            // ==============================================================
+            // BƯỚC 2: COPY DATA VÀO BỘ NHỚ TẠM & HIỆN PHẢN HỒI (Bất đồng bộ)
+            // ==============================================================
+            navigator.clipboard.writeText(markdown).then(() => {
+                btnSubmit.style.background = "#2ea043";
+                btnSubmit.innerHTML = `<ha-icon icon="mdi:check-circle"></ha-icon> ĐÃ COPY & ĐÃ MỞ TAB GITHUB!`;
+
+                // Cảnh báo an toàn nếu trình duyệt (hoặc App HA) khóa Popup
+                if (!newTab || newTab.closed || typeof newTab.closed == 'undefined') {
+                    alert("Trình duyệt hoặc App Home Assistant đã chặn mở cửa sổ mới! \nDữ liệu đã được lưu vào bộ nhớ tạm. Hãy tự mở link Github và dán báo cáo nhé.");
+                }
+
+                setTimeout(() => {
+                    btnSubmit.style.background = "#24292e";
+                    btnSubmit.innerHTML = `BƯỚC 1: COPY MÃ <ha-icon icon="mdi:arrow-right"></ha-icon> BƯỚC 2: MỞ ISSUE TRÊN GITHUB`;
+                }, 3000);
+            }).catch(err => {
+                alert("Lỗi khi copy vào bộ nhớ tạm: " + err);
+            });
+        }
     });
   }
 
-  updateTable() {
-    const tbody = this.querySelector('#debug-table-body');
-    if (!tbody) return;
-
+  renderBody() {
     const headerTitle = this.querySelector('#debug-status-text');
     if (headerTitle) {
-        headerTitle.innerText = `${Object.keys(this._rawJsonData).length} thông số`;
+        let totalCodes = Object.keys(this._rawJsonData).length;
+        if (totalCodes > 0) headerTitle.innerText = `Phát hiện ${totalCodes} mã Active`;
     }
 
-    for (let [key, rawVal] of Object.entries(this._rawJsonData)) {
-        let displayRawVal = typeof rawVal === 'object' ? JSON.stringify(rawVal) : String(rawVal);
-        
-        let dictObj = this._dictionary[key];
-        
-        // 1. Lấy Name: Ưu tiên Custom Alias -> Dictionary Name
-        let defaultName = dictObj ? dictObj.name : "";
-        let currentName = this._aliases[key] || defaultName;
-
-        // 2. Lấy State: Ưu tiên Custom State (dựa trên raw) -> Dictionary Parse -> Raw
-        let defaultState = dictObj ? dictObj.parse(rawVal) : displayRawVal;
-        let currentState = (this._stateAliases[key] && this._stateAliases[key][displayRawVal]) ? this._stateAliases[key][displayRawVal] : defaultState;
-
-        // Tìm row xem đã tồn tại chưa
-        let tr = tbody.querySelector(`tr[data-key="${key}"]`);
-        
-        if (tr) {
-            // CẬP NHẬT ROW CŨ (Không làm mất focus của input)
-            if (tr.getAttribute('data-raw') !== displayRawVal) {
-                tr.setAttribute('data-raw', displayRawVal);
-                tr.querySelector('.raw-val-td').innerText = displayRawVal;
-                
-                // Cập nhật lại input trạng thái nếu user không đang focus vào ô đó
-                let stateInput = tr.querySelector('.rep-state');
-                if (document.activeElement !== stateInput) {
-                    stateInput.value = currentState;
-                }
-            }
-        } else {
-            // THÊM ROW MỚI
-            let newTr = document.createElement('tr');
-            newTr.className = 'report-row';
-            newTr.setAttribute('data-key', key);
-            newTr.setAttribute('data-raw', displayRawVal);
-            
-            newTr.innerHTML = `
-                <td style="color: #f43f5e; font-weight: bold;">${key}</td>
-                <td class="raw-val-td" style="font-weight: bold; color: #e2e8f0;">${displayRawVal}</td>
-                <td><input type="text" class="rep-input rep-name" value="${currentName}" placeholder="Vd: Model xe"></td>
-                <td><input type="text" class="rep-input rep-state" value="${currentState}" placeholder="Vd: Bật"></td>
-            `;
-            tbody.appendChild(newTr);
+    if (this.activeTab === 'log') {
+        const viewLog = this.querySelector('#view-log');
+        if (this._logData.length === 0) {
+            viewLog.innerHTML = `<div style="color:#64748b; text-align:center; margin-top:20px;">[ Bật thiết bị trên xe để bắt mã... ]</div>`;
+            return;
         }
+
+        let html = '';
+        this._logData.forEach((item) => {
+            const alias = this._aliases[item.code] || (this._dictionary[item.code] ? this._dictionary[item.code].name : "");
+            
+            if (this.filterText) {
+                const searchStr = `${item.time} ${item.code} ${item.old_value} ${item.new_value} ${alias}`.toLowerCase();
+                if (!searchStr.includes(this.filterText)) return;
+            }
+
+            html += `
+                <div class="log-item">
+                    <div class="log-left">
+                        <span class="log-time">🕒 ${item.time} • <span class="log-code">${item.code}</span></span>
+                        <input type="text" class="log-name-input" data-code="${item.code}" value="${this._aliases[item.code] || ''}" placeholder="${alias || '✍️ Đặt tên tùy chỉnh (Lưu Local)...'}">
+                    </div>
+                    <div class="log-right">
+                        <div class="log-val-box">
+                            <span class="log-val-old">${item.old_value}</span> 
+                            <span class="log-arrow">➔</span> 
+                            <span class="log-val-new">${item.new_value}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        viewLog.innerHTML = html || `<div style="color:#64748b; text-align:center; margin-top:20px;">[ Không tìm thấy ]</div>`;
+    }
+
+    if (this.activeTab === 'raw') {
+        const viewRaw = this.querySelector('#view-raw');
+        let displayJson = {};
+        for (let [key, value] of Object.entries(this._rawJsonData)) {
+            let dictName = this._dictionary[key] ? this._dictionary[key].name : "";
+            let alias = this._aliases[key] || dictName;
+            
+            if (this.filterText && !key.toLowerCase().includes(this.filterText) && !String(value).toLowerCase().includes(this.filterText) && !alias.toLowerCase().includes(this.filterText)) {
+                continue;
+            }
+            if (alias) displayJson[`${key} (${alias})`] = value;
+            else displayJson[key] = value;
+        }
+        viewRaw.textContent = JSON.stringify(displayJson, null, 2);
+    }
+
+    if (this.activeTab === 'report') {
+        const viewReport = this.querySelector('#view-report');
+        let html = `
+            <div class="guide-box">
+                <div style="font-weight: bold; margin-bottom: 8px; color: #10b981; font-size: 14px;">
+                    <ha-icon icon="mdi:bullhorn-outline" style="width: 18px; height: 18px; margin-bottom: 2px;"></ha-icon> HƯỚNG DẪN CỘNG ĐỒNG:
+                </div>
+                <div style="margin-bottom: 5px;"><span class="guide-step">BƯỚC 1:</span> Gõ dự đoán của bạn vào các ô trống (ưu tiên các mã <span style="color:#f59e0b; font-weight:bold;">Màu Cam</span> - chưa được giải mã).</div>
+                <div style="margin-bottom: 5px;"><span class="guide-step">BƯỚC 2:</span> Bấm nút <b style="color:white;">COPY & MỞ GITHUB</b> ở cuối bảng.</div>
+                <div><span class="guide-step">BƯỚC 3:</span> Trình duyệt sẽ mở tab Github Issue mới. Nếu chưa thấy nội dung được điền sẵn, hãy bấm <b style="color:#38bdf8;">Ctrl + V (Dán)</b> vào khung soạn thảo và bấm Submit!</div>
+            </div>
+            
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th style="width: 20%">Mã Lệnh</th>
+                        <th style="width: 25%">RAW</th>
+                        <th style="width: 28%">Tên Đề xuất</th>
+                        <th style="width: 27%">Trạng thái</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        for (let [key, val] of Object.entries(this._rawJsonData)) {
+            let dictObj = this._dictionary[key];
+            let dictName = dictObj ? dictObj.name : "";
+            let dictState = dictObj ? dictObj.parse(val) : "";
+            
+            let aliasName = this._aliases[key] || "";
+            let displayName = aliasName || dictName;
+            let isUnknown = !dictObj ? 'unknown' : '';
+
+            if (this.filterText && !key.toLowerCase().includes(this.filterText) && !String(val).toLowerCase().includes(this.filterText) && !displayName.toLowerCase().includes(this.filterText)) {
+                continue;
+            }
+
+            let displayVal = typeof val === 'object' ? JSON.stringify(val) : val;
+
+            html += `
+                <tr class="report-row ${isUnknown}" data-key="${key}" data-raw='${displayVal}'>
+                    <td style="color: #f43f5e; font-weight: bold;">${key}</td>
+                    <td style="font-weight: bold; color: #e2e8f0;">${displayVal}</td>
+                    <td><input type="text" class="rep-input rep-name" value="${displayName}" placeholder="Vd: Sưởi ghế..."></td>
+                    <td><input type="text" class="rep-input rep-state" value="${dictState}" placeholder="Vd: Bật"></td>
+                </tr>
+            `;
+        }
+
+        html += `
+                </tbody>
+            </table>
+            <button id="btn-submit-github">
+                BƯỚC 1: COPY MÃ <ha-icon icon="mdi:arrow-right" style="margin:0 5px;"></ha-icon> BƯỚC 2: MỞ ISSUE TRÊN GITHUB
+            </button>
+        `;
+        viewReport.innerHTML = html;
     }
   }
 
