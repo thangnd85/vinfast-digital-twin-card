@@ -22,6 +22,7 @@ class VinFastDigitalTwin extends HTMLElement {
     this._rawRouteCoords = []; 
     this._smoothedRouteCoords = []; 
 
+    // LƯU TRỮ VÀ KHÔI PHỤC TRẠNG THÁI BỘ LỌC TRẠM SẠC
     this._showStations = localStorage.getItem('vf_show_stations') === 'true';
     this._stationFilter = localStorage.getItem('vf_station_filter') || 'ALL'; 
     this._currentStations = []; 
@@ -33,6 +34,7 @@ class VinFastDigitalTwin extends HTMLElement {
     this._entityPrefix = null; 
     this._lastAiMessage = ""; 
 
+    // BIẾN CHO CHẾ ĐỘ HISTORY
     this._tripsData = {}; 
     this._dayStats = {};  
     this._currentDate = new Date(); 
@@ -155,7 +157,6 @@ class VinFastDigitalTwin extends HTMLElement {
             let startTime = dayTrips[0].start_time_str; let endTime = dayTrips[dayTrips.length - 1].end_time_str;
             let mergedSegments = []; let currentSeg = null;
 
-            // THAY ĐỔI LỚN: Lưu lại thời gian dừng đỗ (pauseAfter) cho từng đoạn đường
             dayTrips.forEach((trip, i) => {
                 drivingMins += trip.duration; totalDistance += trip.distance;
                 trip.route.forEach(pt => { if (pt.length > 2 && pt[2] > maxSpeed) maxSpeed = pt[2]; });
@@ -170,7 +171,7 @@ class VinFastDigitalTwin extends HTMLElement {
                     if (timeGap < 900 || distGap < 300) {
                         currentSeg.route = currentSeg.route.concat(trip.route); currentSeg.endTime = trip.time + (trip.duration * 60);
                     } else {
-                        currentSeg.pauseAfter = timeGap; // Lưu thời gian dừng đỗ (giây)
+                        currentSeg.pauseAfter = timeGap; 
                         mergedSegments.push(currentSeg);
                         currentSeg = { time: trip.time, endTime: trip.time + (trip.duration * 60), route: [...trip.route], pauseAfter: 0 };
                     }
@@ -235,7 +236,6 @@ class VinFastDigitalTwin extends HTMLElement {
 
   getCarIcon(angle = 0, speed = null) {
       if(typeof L === 'undefined') return null;
-      // Giảm thời gian transition xuống để xe lướt mượt hơn khi playback
       const arrowSvg = `<svg class="car-dir-svg" viewBox="0 0 24 24" fill="#2563eb" stroke="white" stroke-width="2" style="position: absolute; top: 0; left: 0; transform: rotate(${angle}deg); transform-origin: center; transition: transform 0.05s linear; width: 28px; height: 28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5)); z-index: 1000;"><path d="M12 2L22 20L12 17L2 20L12 2Z"/></svg>`;
       let speedDisplay = speed !== null && speed > 0 ? 'block' : 'none';
       let speedVal = speed !== null ? Math.round(speed) : 0;
@@ -269,18 +269,26 @@ class VinFastDigitalTwin extends HTMLElement {
       }
       
       if (bestStation) {
-          this.querySelector('#vf-suggest-name').innerText = bestStation.name;
+          const elName = this.querySelector('#vf-suggest-name');
+          const elDist = this.querySelector('#vf-suggest-dist');
+          const elPower = this.querySelector('#vf-suggest-power');
+          const elAvail = this.querySelector('#vf-suggest-avail');
+          
+          if(elName) elName.innerText = bestStation.name;
+          
           let exactDist = bestStation.dist;
           if (this._lastLat && this._lastLon && this._map) {
               let distMeters = this._map.distance([this._lastLat, this._lastLon], [bestStation.lat, bestStation.lng]);
               exactDist = (distMeters / 1000).toFixed(1);
           }
-          this.querySelector('#vf-suggest-dist').innerText = exactDist;
-          this.querySelector('#vf-suggest-power').innerText = bestStation.power;
-          this.querySelector('#vf-suggest-avail').innerText = `${bestStation.avail}/${bestStation.total}`;
+          if(elDist) elDist.innerText = exactDist;
+          if(elPower) elPower.innerText = bestStation.power;
+          if(elAvail) elAvail.innerText = `${bestStation.avail}/${bestStation.total}`;
+          
           const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${this._lastLat},${this._lastLon}&destination=${bestStation.lat},${bestStation.lng}&travelmode=driving`;
           const btnNav = this.querySelector('#btn-suggest-nav');
           if (btnNav) btnNav.onclick = () => window.open(navUrl, '_blank');
+          
           suggestCard.style.display = 'block';
       } else { suggestCard.style.display = 'none'; }
   }
@@ -428,7 +436,6 @@ class VinFastDigitalTwin extends HTMLElement {
           if (this._lastLat && this._map) this._map.setView([this._lastLat, this._lastLon], 15);
       } else {
           if(statsPanel) statsPanel.style.display = 'flex';
-          
           if(liveTools) liveTools.style.display = 'none'; 
           if(historyTools) historyTools.style.display = 'contents'; 
           
@@ -484,13 +491,12 @@ class VinFastDigitalTwin extends HTMLElement {
 
           const firstRoute = dailySegments[0];
           const lastRoute = dailySegments[dailySegments.length - 1];
-          this.getAddressFromCoords(firstRoute[0].route[0][0], firstRoute[0].route[0][1]).then(addr => elAddrA.innerText = addr);
+          this.getAddressFromCoords(firstRoute.route[0][0], firstRoute.route[0][1]).then(addr => elAddrA.innerText = addr);
           this.getAddressFromCoords(lastRoute.route[lastRoute.route.length-1][0], lastRoute.route[lastRoute.route.length-1][1]).then(addr => elAddrB.innerText = addr);
 
           let bounds = L.latLngBounds();
           let flatCoordsForReplay = [];
 
-          // TẠO POPUP CHI TIẾT CHO CÁC ĐIỂM DỪNG ĐỖ
           dailySegments.forEach((segmentObj, index) => {
               const segment = segmentObj.route;
               if (segment.length < 2) return;
@@ -508,11 +514,9 @@ class VinFastDigitalTwin extends HTMLElement {
                   let pauseMins = Math.round(segmentObj.pauseAfter / 60);
                   let isParking = pauseMins >= 15;
                   let iconClass = isParking ? 'marker-park' : 'marker-pause';
-                  let iconHtml = isParking ? 'P' : ''; // Chỉ hiện chữ P nếu đỗ lâu
+                  let iconHtml = isParking ? 'P' : '';
                   
                   let marker = L.marker(latlngs[latlngs.length - 1], { icon: L.divIcon({ className: iconClass, html: iconHtml }) }).addTo(this._historyLayerGroup);
-                  
-                  // THẺ THÔNG TIN DỪNG ĐỖ SIÊU ĐẸP
                   let popupHtml = `
                       <div style="font-family:sans-serif; text-align:center; min-width: 140px;">
                           <div style="font-size:11px; font-weight:800; color:${isParking ? '#ef4444' : '#f59e0b'}; margin-bottom:6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">
@@ -714,6 +718,9 @@ class VinFastDigitalTwin extends HTMLElement {
     if (!this.content) {
       this.content = true;
       
+      // ==========================================
+      // LƯU Ý: CẤU TRÚC HTML SẠCH SẼ - KHÔNG BỊ TRÙNG LẶP ID
+      // ==========================================
       this.innerHTML = `
         <ha-card class="vf-card">
           <div class="vf-card-container">
@@ -860,7 +867,7 @@ class VinFastDigitalTwin extends HTMLElement {
                     </div>
                     <ha-icon id="vf-ai-chevron" icon="mdi:chevron-up" style="transition: transform 0.3s ease;"></ha-icon>
                 </div>
-                <div id="vf-ai-content" style="max-height: 200px; margin-top: 8px; overflow: hidden; transition: all 0.3s ease;">
+                <div id="vf-ai-content" style="max-height: 200px; margin-top: 8px; overflow: hidden; transition: all 0.5s ease;">
                     <div id="vf-ai-text" style="font-size: 12px; line-height: 1.5; color: #e2e8f0; font-style: italic;">
                         Đang chờ phân tích chuyến đi...
                     </div>
@@ -1548,6 +1555,23 @@ class VinFastDigitalTwin extends HTMLElement {
         }
     }
 
+    const aiAdvisor = getValidState('co_van_xe_dien_ai');
+    const aiContainer = this.querySelector('#vf-ai-advisor-container');
+    const aiTextEl = this.querySelector('#vf-ai-text');
+    const aiContentEl = this.querySelector('#vf-ai-content');
+    const aiChevron = this.querySelector('#vf-ai-chevron');
+    
+    if (aiContainer && aiTextEl) {
+        if (!aiAdvisor || aiAdvisor === 'DISABLED' || aiAdvisor === 'unavailable') aiContainer.style.display = 'none'; 
+        else if (!aiAdvisor.includes('Hệ thống AI đang chờ') && !aiAdvisor.includes('Vui lòng nhập Google') && !aiAdvisor.includes('waiting')) {
+            aiTextEl.innerText = aiAdvisor; aiContainer.style.display = 'block'; 
+            if (this._lastAiMessage !== aiAdvisor) {
+                this._lastAiMessage = aiAdvisor;
+                if (aiContentEl) { aiContentEl.style.maxHeight = '500px'; aiContentEl.style.marginTop = '8px'; if (aiChevron) aiChevron.style.transform = 'rotate(0deg)'; }
+            }
+        } else aiContainer.style.display = 'none'; 
+    }
+
     const addressEl = this.querySelector('#vf-current-address');
     if (addressEl) {
         let sensorAddress = getValidState('vi_tri_xe_dia_chi');
@@ -1939,5 +1963,4 @@ class VinFastDebugCard extends HTMLElement {
 
 if (!customElements.get('vinfast-debug-card')) {
     customElements.define('vinfast-debug-card', VinFastDebugCard);
-}
 }
