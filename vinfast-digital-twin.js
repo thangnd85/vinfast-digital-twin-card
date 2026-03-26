@@ -759,10 +759,10 @@ class VinFastDigitalTwin extends HTMLElement {
     const formatTimeSince = (dateString) => {
         if (!dateString) return "";
         const s = Math.floor((new Date() - new Date(dateString)) / 1000);
-        if (s < 60) return "vừa xong";
-        const m = Math.floor(s / 60); if (m < 60) return `${m} phút trước`;
-        const h = Math.floor(m / 60); if (h < 24) return `${h} giờ trước`;
-        return `${Math.floor(h / 24)} ngày trước`;
+        if (s < 60) return "- vừa xong";
+        const m = Math.floor(s / 60); if (m < 60) return ` - ${m} phút trước`;
+        const h = Math.floor(m / 60); if (h < 24) return ` - ${h} giờ trước`;
+        return ` - ${Math.floor(h / 24)} ngày trước`;
     };
 
     if (!this.content) {
