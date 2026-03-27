@@ -43,9 +43,10 @@ class VinFastDigitalTwin extends HTMLElement {
     this._addressCache = {};
   }
 
+  // HÀM PARSE JSON SIÊU AN TOÀN (Miễn nhiễm với mảng rỗng và format lỗi)
   safeParseJSON(str) {
       if (!str) return [];
-      if (typeof str !== 'string') return str;
+      if (typeof str !== 'string') return str; 
       try { return JSON.parse(str); }
       catch(e) {
           try { 
@@ -72,6 +73,7 @@ class VinFastDigitalTwin extends HTMLElement {
   }
 
   formatDate(dateObj) {
+      if (isNaN(dateObj.getTime())) return "1970-01-01"; // Fallback an toàn
       const y = dateObj.getFullYear();
       const m = String(dateObj.getMonth() + 1).padStart(2, '0');
       const d = String(dateObj.getDate()).padStart(2, '0');
@@ -79,7 +81,8 @@ class VinFastDigitalTwin extends HTMLElement {
   }
 
   async getAddressFromCoords(lat, lon) {
-      const cacheKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+      if (!lat || !lon) return "Không xác định";
+      const cacheKey = `${parseFloat(lat).toFixed(4)},${parseFloat(lon).toFixed(4)}`;
       if (this._addressCache[cacheKey]) return this._addressCache[cacheKey];
       try {
           const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=16`);
@@ -90,7 +93,7 @@ class VinFastDigitalTwin extends HTMLElement {
           if (parts.length > 3) address = parts.slice(0, 3).join(', ');
           this._addressCache[cacheKey] = address;
           return address;
-      } catch (e) { return `${lat.toFixed(4)}, ${lon.toFixed(4)}`; }
+      } catch (e) { return `${parseFloat(lat).toFixed(4)}, ${parseFloat(lon).toFixed(4)}`; }
   }
 
   loadLeaflet() {
@@ -115,36 +118,74 @@ class VinFastDigitalTwin extends HTMLElement {
   }
 
   async fetchTripHistory(vin) {
-    let rawTrips = null;
-    const urlsToTry = [
-        this.config.json_url,
-        `/local/vinfast_trips_${(vin || '').toLowerCase()}.json`,
-        `/local/vinfast_trips_rlnvbl9k1rh742246.json` 
-    ].filter(Boolean);
+    const vinStr = (vin || '').toLowerCase();
+    let allTripsRaw = [];
 
-    for (let url of urlsToTry) {
+    // LẤY FILE MAIN
+    try {
+        const resMain = await fetch(`/local/vinfast_trips_${vinStr}.json?v=${new Date().getTime()}`);
+        if (resMain.ok) {
+            const data = await resMain.json();
+            if (Array.isArray(data)) allTripsRaw = allTripsRaw.concat(data);
+        }
+    } catch(e) {}
+
+    // LẤY CÁC FILE ARCHIVE (QUÉT 6 THÁNG GẦN NHẤT)
+    let d = new Date();
+    for (let i = 0; i < 6; i++) {
+        let y = d.getFullYear();
+        let m = String(d.getMonth() + 1).padStart(2, '0');
+        let archUrl = `/local/vinfast_trips_archive_${vinStr}_${y}_${m}.json`;
         try {
-            const res = await fetch(`${url}?v=${new Date().getTime()}`);
-            if (res.ok) { rawTrips = await res.json(); break; }
-        } catch(e) { }
+            const resArch = await fetch(`${archUrl}?v=${new Date().getTime()}`);
+            if (resArch.ok) {
+                const dataArch = await resArch.json();
+                if (Array.isArray(dataArch)) allTripsRaw = allTripsRaw.concat(dataArch);
+            }
+        } catch(e) {}
+        d.setMonth(d.getMonth() - 1); 
     }
 
-    if (rawTrips) {
+    // LỌC BỎ TRÙNG LẶP TRONG CÁC FILE BẰNG ID CHUYẾN ĐI
+    let uniqueTripsMap = new Map();
+    allTripsRaw.forEach(trip => {
+        let tId = trip.id || trip.timestamp;
+        if (!uniqueTripsMap.has(tId)) {
+            uniqueTripsMap.set(tId, trip);
+        }
+    });
+    
+    let rawTrips = Array.from(uniqueTripsMap.values());
+
+    if (rawTrips && Array.isArray(rawTrips) && rawTrips.length > 0) {
         let groupedData = {};
+        
         rawTrips.forEach(trip => {
-            let ts = trip.id || trip.start_time || trip.timestamp;
-            let d = new Date(ts > 1e11 ? ts : ts * 1000);
-            let dateStr = this.formatDate(d);
+            let dateStr = "";
+            if (trip.date && typeof trip.date === 'string') {
+                let parts = trip.date.split(/[-/]/);
+                if (parts.length === 3) {
+                    if (parts[0].length === 4) dateStr = `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+                    else dateStr = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+                }
+            }
+            if (!dateStr) {
+                let ts = trip.id || trip.timestamp;
+                let dtObj = new Date((ts && ts > 1e11) ? ts : (ts ? ts * 1000 : Date.now()));
+                if (isNaN(dtObj.getTime())) dtObj = new Date();
+                dateStr = this.formatDate(dtObj);
+            }
+
             if (!groupedData[dateStr]) groupedData[dateStr] = [];
 
-            if (trip.route && trip.route.length > 0) {
+            if (trip.route && Array.isArray(trip.route) && trip.route.length > 0) {
                 groupedData[dateStr].push({
-                    id: trip.id || ts,
-                    time: ts, 
+                    id: trip.id || new Date().getTime(),
+                    time: trip.id || trip.timestamp || 0, 
                     duration: trip.duration || 0, 
                     distance: trip.distance || 0,
-                    start_time_str: trip.start_time || "", 
-                    end_time_str: trip.end_time || "",
+                    start_time_str: trip.start_time || "--:--", 
+                    end_time_str: trip.end_time || "--:--",
                     route: trip.route
                 });
             }
@@ -158,13 +199,15 @@ class VinFastDigitalTwin extends HTMLElement {
             let dayTrips = groupedData[day];
             
             let drivingMins = 0; let totalDistance = 0; let pauseSecs = 0; let parkingSecs = 0; let maxSpeed = 0;
-            let startTime = dayTrips[0].start_time_str; 
-            let endTime = dayTrips[dayTrips.length - 1].end_time_str;
+            let startTime = dayTrips[0]?.start_time_str || "--:--"; 
+            let endTime = dayTrips[dayTrips.length - 1]?.end_time_str || "--:--";
 
             dayTrips.forEach((trip, i) => {
                 drivingMins += trip.duration; 
                 totalDistance += trip.distance;
-                trip.route.forEach(pt => { if (pt.length > 2 && pt[2] > maxSpeed) maxSpeed = pt[2]; });
+                if (Array.isArray(trip.route)) {
+                    trip.route.forEach(pt => { if (Array.isArray(pt) && pt.length > 2 && pt[2] > maxSpeed) maxSpeed = pt[2]; });
+                }
 
                 if (i < dayTrips.length - 1) {
                     let gapSecs = dayTrips[i+1].time - (trip.time + (trip.duration * 60));
@@ -190,7 +233,7 @@ class VinFastDigitalTwin extends HTMLElement {
 
   cleanRouteData(points) {
       if (!points || !Array.isArray(points) || points.length === 0) return [];
-      return points.map(p => [p[0], p[1], p[2] || 0]); 
+      return points.filter(p => Array.isArray(p) && p.length >= 2).map(p => [p[0], p[1], p[2] || 0]); 
   }
 
   _smoothRouteData(points) {
@@ -267,7 +310,7 @@ class VinFastDigitalTwin extends HTMLElement {
           this.querySelector('#vf-suggest-power').innerText = bestStation.power;
           this.querySelector('#vf-suggest-avail').innerText = `${bestStation.avail}/${bestStation.total}`;
           
-          let navUrl = `https://www.google.com/maps/dir/...?travelmode=driving`;
+          let navUrl = `http://googleusercontent.com/maps.google.com/7`;
           if (this._lastLat && this._lastLon) {
               navUrl += `&origin=${this._lastLat},${this._lastLon}`;
           }
@@ -322,7 +365,7 @@ class VinFastDigitalTwin extends HTMLElement {
                   iconSize: [pinWidth, 26], iconAnchor: [pinWidth / 2, 13] 
               });
 
-              let navUrl = `https://www.google.com/maps/dir/...?travelmode=driving`;
+              let navUrl = `http://googleusercontent.com/maps.google.com/7`;
               if (this._lastLat && this._lastLon) {
                   navUrl += `&origin=${this._lastLat},${this._lastLon}`;
               }
@@ -504,26 +547,30 @@ class VinFastDigitalTwin extends HTMLElement {
       }
 
       let totalDist = 0, totalDrive = 0, totalPause = 0, totalPark = 0, maxSpd = 0;
-      let startT = tripsToRender[0].start_time_str;
-      let endT = tripsToRender[tripsToRender.length - 1].end_time_str;
+      let startT = tripsToRender[0]?.start_time_str || "--:--";
+      let endT = tripsToRender[tripsToRender.length - 1]?.end_time_str || "--:--";
       
       if (tripIndex === 'all') {
           const stats = this._dayStats[dateStr];
-          totalDist = stats.totalDistance;
-          totalDrive = stats.drivingMins;
-          totalPause = stats.pauseMins;
-          totalPark = stats.parkingMins;
-          maxSpd = stats.maxSpeed;
+          if (stats) {
+              totalDist = stats.totalDistance;
+              totalDrive = stats.drivingMins;
+              totalPause = stats.pauseMins;
+              totalPark = stats.parkingMins;
+              maxSpd = stats.maxSpeed;
+          }
       } else {
           const t = tripsToRender[0];
           totalDist = t.distance.toFixed(1);
           totalDrive = t.duration;
           totalPause = 0; totalPark = 0;
-          t.route.forEach(pt => { if (pt.length > 2 && pt[2] > maxSpd) maxSpd = pt[2]; });
+          if (Array.isArray(t.route)) {
+              t.route.forEach(pt => { if (Array.isArray(pt) && pt.length > 2 && pt[2] > maxSpd) maxSpd = pt[2]; });
+          }
       }
 
-      this.querySelector('#stat-time-a').innerText = startT || '--:--';
-      this.querySelector('#stat-time-b').innerText = endT || '--:--';
+      this.querySelector('#stat-time-a').innerText = startT;
+      this.querySelector('#stat-time-b').innerText = endT;
       this.querySelector('#stat-dist').innerText = `${totalDist} km`; 
       this.querySelector('#stat-drive').innerText = this.formatMins(totalDrive);
       this.querySelector('#stat-pause').innerText = this.formatMins(totalPause);
@@ -544,8 +591,17 @@ class VinFastDigitalTwin extends HTMLElement {
       elAddrA.innerText = "Đang dịch tọa độ...";
       elAddrB.innerText = "Đang dịch tọa độ...";
 
-      this.getAddressFromCoords(tripsToRender[0].route[0][0], tripsToRender[0].route[0][1]).then(addr => elAddrA.innerText = addr);
-      this.getAddressFromCoords(tripsToRender[tripsToRender.length-1].route[tripsToRender[tripsToRender.length-1].route.length-1][0], tripsToRender[tripsToRender.length-1].route[tripsToRender[tripsToRender.length-1].route.length-1][1]).then(addr => elAddrB.innerText = addr);
+      if (tripsToRender[0].route && Array.isArray(tripsToRender[0].route) && tripsToRender[0].route.length > 0 && Array.isArray(tripsToRender[0].route[0])) {
+          this.getAddressFromCoords(tripsToRender[0].route[0][0], tripsToRender[0].route[0][1]).then(addr => elAddrA.innerText = addr);
+      }
+      
+      const lastRouteSegment = tripsToRender[tripsToRender.length-1].route;
+      if (lastRouteSegment && Array.isArray(lastRouteSegment) && lastRouteSegment.length > 0) {
+          const lPt = lastRouteSegment[lastRouteSegment.length-1];
+          if(Array.isArray(lPt)) {
+             this.getAddressFromCoords(lPt[0], lPt[1]).then(addr => elAddrB.innerText = addr);
+          }
+      }
 
       let bounds = L.latLngBounds();
       let flatCoordsForReplay = [];
@@ -553,7 +609,8 @@ class VinFastDigitalTwin extends HTMLElement {
 
       tripsToRender.forEach((segmentObj, index) => {
           const segment = segmentObj.route;
-          if (segment.length < 2) return;
+          if (!segment || !Array.isArray(segment) || segment.length < 2) return;
+          
           flatCoordsForReplay.push(...segment); 
 
           const latlngs = segment.map(pt => [pt[0], pt[1]]);
@@ -565,7 +622,7 @@ class VinFastDigitalTwin extends HTMLElement {
           }
           
           if (index < tripsToRender.length - 1 && tripIndex === 'all') {
-              let pauseMins = Math.round(segmentObj.pauseAfter / 60);
+              let pauseMins = Math.round((segmentObj.pauseAfter || 0) / 60);
               let isParking = pauseMins >= 15;
               let iconClass = isParking ? 'marker-park' : 'marker-pause';
               let currentStopNum = stopCount++;
@@ -648,13 +705,17 @@ class VinFastDigitalTwin extends HTMLElement {
                 if (this._smoothedRouteCoords && this._smoothedRouteCoords.length > 0) coordsToAnalyze = [this._smoothedRouteCoords];
             } else {
                 let flatHistory = [];
-                (this._tripsData[this._selectedDateStr] || []).forEach(seg => { flatHistory.push(...seg.route); });
+                (this._tripsData[this._selectedDateStr] || []).forEach(seg => { 
+                    if (Array.isArray(seg.route)) flatHistory.push(...seg.route); 
+                });
                 coordsToAnalyze = [flatHistory];
             }
             
             let foundData = false;
             coordsToAnalyze.forEach(segment => {
+                if (!Array.isArray(segment)) return;
                 for (let i = 0; i < segment.length - 1; i++) {
+                    if (!segment[i] || !segment[i+1]) continue;
                     let ptA = segment[i]; let ptB = segment[i+1];
                     let dist = this.getDistanceFromLatLonInM(ptA[0], ptA[1], ptB[0], ptB[1]) / 1000;
                     let spd = ptB[2] || 0;
@@ -1464,32 +1525,6 @@ class VinFastDigitalTwin extends HTMLElement {
         doorsEl.innerHTML = securityHtml;
     }
 
-    // ===============================================
-    // PHỤC HỒI LOGIC CẬP NHẬT THẺ ĐANG SẠC
-    // ===============================================
-    const chargingBanner = this.querySelector('#vf-charging-banner');
-    const isCharging = statusTextRaw && (statusTextRaw.toLowerCase().includes('sạc') || statusTextRaw.toLowerCase().includes('hoàn tất'));
-    
-    if (isCharging && chargingBanner && !statusTextRaw.toLowerCase().includes('không')) {
-        chargingBanner.style.display = 'flex';
-        let chargeLimit = getValidState('muc_tieu_sac_target') || '--'; 
-        const chargeTimeRemain = getValidState('thoi_gian_sac_con_lai');
-        
-        const chargeLimitEl = this.querySelector('#vf-charge-limit'); 
-        const chargeTimeEl = this.querySelector('#vf-charge-time'); 
-        const chargeStatusTextEl = this.querySelector('#vf-charge-status-text'); 
-        const powerEl = this.querySelector('#vf-charge-power');
-        
-        if (chargeLimitEl) chargeLimitEl.innerText = chargeLimit !== '--' ? `${chargeLimit}%` : '--';
-        if (chargeTimeEl) chargeTimeEl.innerText = (chargeTimeRemain && chargeTimeRemain !== 'unknown') ? `${chargeTimeRemain}` : '--';
-        if (chargeStatusTextEl) chargeStatusTextEl.innerText = statusTextRaw.toLowerCase().includes('đầy') || statusTextRaw.toLowerCase().includes('hoàn tất') ? "Đã sạc đầy" : "Hệ thống đang sạc";
-        
-        let pwr = getValidState('cong_suat_sac_tinh_toan_live') || getValidState('cong_suat_sac_trung_binh_lan_cuoi') || getValidState('cong_suat_sac_tram') || getValidState('cong_suat_sac');
-        if (powerEl) powerEl.innerText = pwr ? `${pwr} kW` : 'Đang tính...';
-    } else if (chargingBanner) {
-        chargingBanner.style.display = 'none';
-    }
-
     const batt = getValidState('phan_tram_pin');
     let range = getValidState('quang_duong_du_kien');
     if (!range || range === '0' || range === '0.0' || range === '--' || range === 'unknown') {
@@ -1613,7 +1648,7 @@ class VinFastDigitalTwin extends HTMLElement {
         let htmlChart = '';
         let maxVal = 0;
         let bars = [];
-        const sObj = hass.states[`sensor.${p}_dai_toc_do_toi_uu_nhat`];
+        const sObj = this._hass.states[`sensor.${p}_dai_toc_do_toi_uu_nhat`];
         if (sObj && sObj.attributes) {
             for (let key in sObj.attributes) {
                 if (key.includes('Dải')) {
@@ -1666,9 +1701,6 @@ class VinFastDigitalTwin extends HTMLElement {
         else addressEl.innerText = "Đang tìm vị trí...";
     }
 
-    // ===============================================
-    // PHỤC HỒI LOGIC ĐỔI VIỀN ĐỎ THẺ PIN (TỪ NGƯỜI DÙNG)
-    // ===============================================
     if (batt && !isNaN(batt)) {
         const battNum = parseFloat(batt); 
         const stageEl = this.querySelector('#vf-car-stage');
