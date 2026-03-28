@@ -72,9 +72,16 @@ Bỏ chữ sensor. ở đầu và bỏ phần chức năng _phan_tram_pin ở cu
 
 📸 Ảnh chụp màn hình (Screenshots)
 
-<img width="500" alt="image" src="https://github.com/user-attachments/assets/d5b1666f-5321-4d29-8ed7-5c3807aa52fd" />
-<img width="500"  alt="image" src="https://github.com/user-attachments/assets/59173aa8-d57f-4b66-93a3-149934806b94" />
-<img width="500"  alt="image" src="https://github.com/user-attachments/assets/9577a9b1-3417-4d9f-87ce-ec4a8c8f3ee1" />
+
+<img width="484"  alt="image" src="https://github.com/user-attachments/assets/cd5410a9-936f-459e-ba8f-a7628413b85c" />
+
+<img width="484" alt="image" src="https://github.com/user-attachments/assets/ca1d18dc-8d4d-46f9-a87e-57c492bffb17" />
+
+<img width="484" alt="image" src="https://github.com/user-attachments/assets/fd32dc0c-70e1-4619-977c-49c19a3a2424" />
+
+<img width="484" alt="image" src="https://github.com/user-attachments/assets/11f68c2d-4bdc-4003-8bdf-63b0e54c0600" />
+
+<img width="484"  alt="image" src="https://github.com/user-attachments/assets/a2f4a13a-4609-4833-9838-a163d9ff4b3f" />
 
 <p align="center">
 <b>Giao diện hiển thị Gọn gàng - Responsive 100% trên cả Điện thoại và Tablet.</b>
@@ -82,11 +89,11 @@ Bỏ chữ sensor. ở đầu và bỏ phần chức năng _phan_tram_pin ở cu
 
 Bổ sung giao diện debug:
 
-<img width="692" height="823" alt="image" src="https://github.com/user-attachments/assets/94901698-cb17-499d-a0cf-42adf882ca51" />
+<img width="692"  alt="image" src="https://github.com/user-attachments/assets/94901698-cb17-499d-a0cf-42adf882ca51" />
 
 Gửi lên cho dev:
 
-<img width="721" height="640" alt="image" src="https://github.com/user-attachments/assets/559cd6ec-bedd-487e-af1d-fbf104b46247" />
+<img width="721" alt="image" src="https://github.com/user-attachments/assets/559cd6ec-bedd-487e-af1d-fbf104b46247" />
 
 Cách tạo Card Debug: 
 
