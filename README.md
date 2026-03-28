@@ -75,6 +75,9 @@ Bỏ chữ sensor. ở đầu và bỏ phần chức năng _phan_tram_pin ở cu
 
 <img width="484"  alt="image" src="https://github.com/user-attachments/assets/cd5410a9-936f-459e-ba8f-a7628413b85c" />
 
+<img width="485"  alt="image" src="https://github.com/user-attachments/assets/1b282057-bfb2-42df-8b5a-fe3aa2e0d536" />
+
+
 <img width="484" alt="image" src="https://github.com/user-attachments/assets/ca1d18dc-8d4d-46f9-a87e-57c492bffb17" />
 
 <img width="484" alt="image" src="https://github.com/user-attachments/assets/fd32dc0c-70e1-4619-977c-49c19a3a2424" />
