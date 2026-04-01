@@ -307,11 +307,11 @@ class VinFastDigitalTwin extends HTMLElement {
           this.querySelector('#vf-suggest-power').innerText = bestStation.power;
           this.querySelector('#vf-suggest-avail').innerText = `${bestStation.avail}/${bestStation.total}`;
           
-          let navUrl = `http://googleusercontent.com/maps.google.com/7`;
+          // FIX BẢN LỖI PARSE URL MAPS
+          let navUrl = "https://www.google.com/maps/dir/?api=1&destination=" + bestStation.lat + "," + bestStation.lng + "&travelmode=driving";
           if (this._lastLat && this._lastLon) {
-              navUrl += `&origin=${this._lastLat},${this._lastLon}`;
+              navUrl = "https://www.google.com/maps/dir/?api=1&origin=" + this._lastLat + "," + this._lastLon + "&destination=" + bestStation.lat + "," + bestStation.lng + "&travelmode=driving";
           }
-          navUrl += `&destination=${bestStation.lat},${bestStation.lng}`;
           
           const btnNav = this.querySelector('#btn-suggest-nav');
           if (btnNav) btnNav.onclick = () => window.open(navUrl, '_blank');
@@ -362,11 +362,11 @@ class VinFastDigitalTwin extends HTMLElement {
                   iconSize: [pinWidth, 26], iconAnchor: [pinWidth / 2, 13] 
               });
 
-              let navUrl = `http://googleusercontent.com/maps.google.com/7`;
+              // FIX BẢN LỖI PARSE URL MAPS
+              let navUrl = "https://www.google.com/maps/dir/?api=1&destination=" + st.lat + "," + st.lng + "&travelmode=driving";
               if (this._lastLat && this._lastLon) {
-                  navUrl += `&origin=${this._lastLat},${this._lastLon}`;
+                  navUrl = "https://www.google.com/maps/dir/?api=1&origin=" + this._lastLat + "," + this._lastLon + "&destination=" + st.lat + "," + st.lng + "&travelmode=driving";
               }
-              navUrl += `&destination=${st.lat},${st.lng}`;
               
               const popupContent = `
                   <div style="font-family:sans-serif; min-width: 170px;">
@@ -1138,16 +1138,20 @@ class VinFastDigitalTwin extends HTMLElement {
         .detail-row:last-child { border-bottom: none; padding-bottom: 0; }
         @keyframes slideDown { from { opacity: 0; transform: scaleY(0.95); } to { opacity: 1; transform: scaleY(1); } }
         
+        /* ĐỊA CHỈ & MAP WRAPPER */
         .vf-address-bar { background: var(--secondary-background-color, #f3f4f6); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--divider-color, #e5e7eb);}
         .map-and-cal-wrapper { position: relative; z-index: 2; margin-bottom: 12px; }
         .vf-map-container { position:relative; border-radius:16px; overflow:hidden; border:1px solid var(--divider-color, #e5e7eb); width: 100%; height: 45vh; min-height: 350px; z-index: 1;}
         
-        .glass-panel { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-radius: 10px; display: flex; }
+        /* HIỆU ỨNG GLASSMORPHISM */
+        .glass-panel { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.5); box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-radius: 10px; display: flex; }
         
-        .cal-toggle-btn { width: 34px; height: 34px; padding: 0; cursor: pointer; align-items: center; justify-content: center; transition: 0.2s; position: relative;}
+        /* NÚT LỊCH GÓC TRÁI */
+        .cal-toggle-btn { position: absolute; top: 10px; left: 10px; z-index: 1000; padding: 6px; cursor: pointer; align-items: center; justify-content: center; transition: 0.2s;}
         .cal-toggle-btn:hover { background: rgba(255,255,255,1); transform: scale(1.05); }
         
-        .cal-dropdown { position: absolute; top: 50px; left: 12px; z-index: 1001; background: white; border-radius: 14px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: calc(100% - 24px); max-width: 320px; display: none; flex-direction: column; border: 1px solid #e2e8f0; box-sizing: border-box;}
+        /* DROPDOWN LỊCH RESPONSIVE */
+        .cal-dropdown { position: absolute; top: 50px; left: 10px; z-index: 1001; background: white; border-radius: 14px; padding: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); width: calc(100% - 20px); max-width: 320px; display: none; flex-direction: column; border: 1px solid #e2e8f0; box-sizing: border-box;}
         .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-weight: 700; color: #0f172a; font-size: 15px;}
         .cal-btn { background: transparent; border: none; cursor: pointer; font-size: 16px; padding: 6px; border-radius: 8px; display: flex; align-items: center; justify-content: center;}
         .cal-btn:hover { background: #f1f5f9; }
@@ -1161,6 +1165,7 @@ class VinFastDigitalTwin extends HTMLElement {
         .cal-day.has-trip::after { content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 4px; height: 4px; background-color: #10b981; border-radius: 50%; }
         .cal-day.active.has-trip::after { background-color: white; }
 
+        /* BẢNG THỐNG KÊ MỚI (TRỤC THỜI GIAN) NẰM NGOÀI BẢN ĐỒ */
         .stats-panel { background: var(--card-background-color, #ffffff); border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); display: none; flex-direction: column; gap: 4px; border: 1px solid var(--divider-color, #e5e7eb); margin-bottom: 16px;}
         .stat-endpoint { display: flex; align-items: center; gap: 12px; }
         .endpoint-icon { width: 28px; height: 28px; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 13px; flex-shrink: 0; }
@@ -1177,6 +1182,7 @@ class VinFastDigitalTwin extends HTMLElement {
         .metric-text span:first-child { font-weight: 800; font-size: 13px; color: #0f172a; line-height: 1.2;}
         .metric-text span:last-child { font-size: 10px; color: #64748b; }
 
+        /* BỘ NÚT ĐIỀU KHIỂN BẢN ĐỒ GÓC PHẢI */
         .map-controls { position: absolute; top: 12px; right: 12px; z-index: 400; flex-direction: column; gap: 4px; padding: 6px; }
         .map-btn { width: 34px; height: 34px; background: transparent; border: none; border-radius: 8px; cursor: pointer; display:flex; align-items:center; justify-content:center; color: #334155; transition: 0.2s;}
         .map-btn:hover { background: rgba(255,255,255,1); transform: scale(1.1); }
@@ -1185,13 +1191,9 @@ class VinFastDigitalTwin extends HTMLElement {
         .text-btn { font-size: 10px; font-weight: 800; color: #f59e0b; width: 100%; padding: 0; height: 20px; background: rgba(255,255,255,0.6); border-radius: 4px; margin-top: -2px;}
         .map-divider { height: 1px; background: rgba(0,0,0,0.1); margin: 2px 6px; }
 
-        .leaflet-popup-content-wrapper { border-radius: 12px !important; padding: 0 !important; box-shadow: 0 10px 25px rgba(0,0,0,0.2) !important; border: 1px solid #e2e8f0;}
-        .leaflet-popup-content { margin: 12px !important; line-height: 1.4; }
-        .leaflet-popup-tip { background: white !important; }
-
+        /* MARKERS BẢN ĐỒ */
         .marker-start { background: #10b981; border: 2px solid white; border-radius: 50%; box-shadow: 0 3px 6px rgba(0,0,0,0.3); width: 14px !important; height: 14px !important; margin-top:-7px; margin-left:-7px;}
-        .marker-park { background: #ef4444; border: 2px solid white; border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; width: 18px !important; height: 18px !important; margin-top:-9px; margin-left:-9px; box-shadow: 0 3px 6px rgba(0,0,0,0.3);}
-        .marker-pause { background: #f59e0b; border: 2px solid white; border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; width: 18px !important; height: 18px !important; margin-top:-9px; margin-left:-9px; box-shadow: 0 3px 6px rgba(0,0,0,0.3);}
+        .marker-pause { background: #f59e0b; border: 2px solid white; border-radius: 50%; box-shadow: 0 3px 6px rgba(0,0,0,0.3); width: 12px !important; height: 12px !important; margin-top:-6px; margin-left:-6px;}
         .marker-end-flag { font-size: 20px; line-height: 1; filter: drop-shadow(0 3px 3px rgba(0,0,0,0.3)); margin-top:-20px; margin-left:-10px;}
         .marker-continue { background: #3b82f6; border: 2px solid white; border-radius: 50%; color: white; display: flex; justify-content: center; align-items: center; font-size: 10px; font-weight: bold; width: 18px !important; height: 18px !important; margin-top:-9px; margin-left:-9px; box-shadow: 0 3px 6px rgba(0,0,0,0.3);}
       `;
@@ -1230,7 +1232,7 @@ class VinFastDigitalTwin extends HTMLElement {
           
           if (!isExpanded) {
               box.classList.add('active-box'); container.style.display = 'block'; detail.style.display = 'block';
-              if (boxId === '#box-charge') this.fetchChargeHistory(vinStr);
+              if (boxId === '#box-charge') this.renderChargeHistory();
           }
       };
 
@@ -1242,7 +1244,7 @@ class VinFastDigitalTwin extends HTMLElement {
           aiHeader.onclick = () => {
               const isCollapsed = aiContent.style.maxHeight === '0px';
               if (isCollapsed) {
-                  aiContent.style.maxHeight = '500px'; aiContent.style.marginTop = '8px'; aiChevron.style.transform = 'rotate(0deg)';
+                  aiContent.style.maxHeight = '200px'; aiContent.style.marginTop = '8px'; aiChevron.style.transform = 'rotate(0deg)';
               } else {
                   aiContent.style.maxHeight = '0px'; aiContent.style.marginTop = '0px'; aiChevron.style.transform = 'rotate(180deg)';
               }
@@ -1262,6 +1264,10 @@ class VinFastDigitalTwin extends HTMLElement {
               });
           } else { html = `<div style="padding:10px; text-align:center; color:var(--secondary-text-color, #6b7280); font-size:11px;">Chưa có dữ liệu sạc trạm.</div>`; }
           
+          const pSessions = this.querySelector('#inline-pub-sessions'); const hSessions = this.querySelector('#inline-home-sessions'); const hKwh = this.querySelector('#inline-home-kwh');
+          if(pSessions) pSessions.innerText = getValidState('so_lan_sac_tai_tram') || 0;
+          if(hSessions) hSessions.innerText = getValidState('so_lan_sac_tai_nha') || 0;
+          if(hKwh) hKwh.innerText = getValidState('dien_nang_sac_tai_nha') || 0;
           listEl.innerHTML = html;
       };
 
@@ -2211,7 +2217,7 @@ class VinFastDebugCard extends HTMLElement {
                 </tbody>
             </table>
             <button id="btn-submit-github">
-                BƯỚC 1: COPY MÃ <ha-icon icon="mdi:arrow-right" style="margin:0 5px;"></ha-icon> BƯỚC 2: MỞ ISSUE TRÊN GITHUB
+                BƯỚC 1: COPY MÃ <ha-icon icon="mdi:arrow-right" style="margin:0 5px;\"></ha-icon> BƯỚC 2: MỞ ISSUE TRÊN GITHUB
             </button>
         `;
         viewReport.innerHTML = html;
